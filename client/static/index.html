@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Super Mimi Kart!</title>
+
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background-color: #000000;
+      }
+
+      #CanvasWrapper {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        width: 100vw;
+      }
+
+      #GameCanvas {
+        image-rendering: pixelated;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="CanvasWrapper"><canvas id="GameCanvas"></canvas></div>
+
+    <script type="module">
+      import init from "./client.js";
+
+      const canvas = document.getElementById("GameCanvas");
+
+      function resize() {
+        const scale_x = window.innerWidth / 480;
+        const scale_y = window.innerHeight / 240;
+        const scale = Math.max(1, Math.floor(Math.max(scale_x, scale_y)));
+
+        const width = window.innerWidth / scale;
+        const height = window.innerHeight / scale;
+
+        canvas.width = width;
+        canvas.height = height;
+        canvas.style.width = `${width * scale}px`;
+        canvas.style.height = `${height * scale}px`;
+      }
+
+      resize();
+      window.addEventListener("resize", resize);
+
+      await init();
+    </script>
+  </body>
+</html>
