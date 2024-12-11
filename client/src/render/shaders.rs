@@ -1,10 +1,11 @@
 use glow::*;
 use include_dir::{include_dir, Dir};
 
-static SHADERS: Dir = include_dir!("$CARGO_MANIFEST_DIR/src/game/shaders");
+static SHADERS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/src/render/shaders");
 
 mod unlit;
 
+#[derive(Debug)]
 pub struct Shaders {
     pub unlit: unlit::UnlitShader,
 }
@@ -23,7 +24,9 @@ impl Shaders {
 
 fn load(gl: &Context, name: &str) -> Program {
     let program = unsafe { gl.create_program().expect("Cannot create program") };
-    let dir = SHADERS.get_dir(name).expect("Cannot find shader directory");
+    let dir = SHADERS_DIR
+        .get_dir(name)
+        .expect(&format!("cannot find shader directory: {}", name));
 
     let mut shaders = Vec::new();
     for file in dir.files() {

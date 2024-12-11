@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+pub mod types;
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct ClientId(u32);
 impl ClientId {

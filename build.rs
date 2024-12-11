@@ -1,4 +1,7 @@
-use std::{path::Path, process::Command};
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 const WEB_CLIENT_DIR: &str = "./client";
 const STATIC_GAME_DIR: &str = "./static/game";
@@ -9,21 +12,25 @@ fn main() {
 
 fn build_client() {
     let web_client_dir = Path::new(WEB_CLIENT_DIR);
+    println!("cargo:rerun-if-changed={}", WEB_CLIENT_DIR);
 
+    let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
     let profile = std::env::var("PROFILE").unwrap();
 
     // build the web client
     if !std::env::var("SKIP_CLIENT_BUILD").is_ok() {
         let mut build_wasm = Command::new("wasm-pack");
         build_wasm.arg("build");
-        
+
         if profile == "release" {
             build_wasm.arg("--release");
         } else {
             build_wasm.arg("--debug");
         }
 
+        build_wasm.arg("--out-dir").arg(&out_dir.join("pkg"));
         build_wasm.arg("--target").arg("web");
+        build_wasm.env("CARGO_TARGET_DIR", &out_dir.join("target"));
         build_wasm.current_dir(web_client_dir);
         let status = build_wasm.status().unwrap();
 
@@ -32,9 +39,10 @@ fn build_client() {
 
     // copy client files to server
     let server_asset_dir = Path::new(STATIC_GAME_DIR);
+
     std::fs::remove_dir_all(&server_asset_dir).unwrap_or(()); // remove old files
     std::fs::create_dir_all(&server_asset_dir).unwrap();
-    copy_dir(&web_client_dir.join("pkg"), &server_asset_dir);
+    copy_dir(&out_dir.join("pkg"), &server_asset_dir);
     copy_dir(&web_client_dir.join("static"), &server_asset_dir);
 
     println!("cargo:rerun-if-changed={}", WEB_CLIENT_DIR);
