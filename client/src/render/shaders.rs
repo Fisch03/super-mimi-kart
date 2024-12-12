@@ -8,17 +8,20 @@ mod unlit;
 #[derive(Debug)]
 pub struct Shaders {
     pub unlit: unlit::UnlitShader,
+    pub billboard: unlit::BillboardShader,
 }
 
 impl Shaders {
     pub fn new(gl: &Context) -> Self {
         Self {
             unlit: unlit::UnlitShader::new(gl),
+            billboard: unlit::BillboardShader::new(gl),
         }
     }
 
     pub fn cleanup(&self, gl: &Context) {
         self.unlit.cleanup(gl);
+        self.billboard.cleanup(gl);
     }
 }
 

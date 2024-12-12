@@ -1,18 +1,22 @@
-use crate::render::RenderContext;
+use crate::render::{RenderContext, UpdateContext};
 use glow::*;
 
 use common::types::*;
 
 pub trait Object
 where
-    Self: AsRef<Transform>,
+    Self: AsRef<Transform> + core::fmt::Debug,
 {
-    fn update(&mut self, dt: f32) {}
+    fn update(&mut self, _ctx: &mut UpdateContext) {}
     fn render(&self, ctx: &RenderContext);
+
+    fn key_down(&mut self, _key: &str) {}
+    fn key_up(&mut self, _key: &str) {}
+
     fn cleanup(&self, gl: &Context);
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Transform {
     pub pos: Position,
     pub rot: Rotation,
@@ -46,14 +50,19 @@ impl Transform {
             ..self
         }
     }
-    pub fn scale_uniform(self, s: f32) -> Self {
-        Self {
-            scale: Vec3::new(s, s, s),
-            ..self
-        }
+
+    pub fn scale_uniform(&mut self, s: f32) {
+        self.scale = Vec3::new(s, s, s);
     }
 
-    pub fn mat(&self) -> Mat4 {
+    pub fn rotate_around(&mut self, point: Vec3, angle: f32) {
+        let axis = Vec3::new(0.0, 1.0, 0.0);
+        let rot = Quat::from_axis_angle(axis, angle.to_radians());
+        self.pos = rot * (self.pos - point) + point;
+        self.rot.y -= angle;
+    }
+
+    pub fn model_mat(&self) -> Mat4 {
         Mat4::from_translation(self.pos)
             * Mat4::from_rotation_x(self.rot.x.to_radians())
             * Mat4::from_rotation_y(self.rot.y.to_radians())
@@ -62,6 +71,8 @@ impl Transform {
     }
 
     pub fn bind(&self, gl: &Context, loc: &UniformLocation) {
-        unsafe { gl.uniform_matrix_4_f32_slice(Some(loc), false, &self.mat().to_cols_array()) }
+        unsafe {
+            gl.uniform_matrix_4_f32_slice(Some(loc), false, &self.model_mat().to_cols_array())
+        }
     }
 }

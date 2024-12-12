@@ -1,4 +1,5 @@
 pub use glam::f32::*;
+pub use glam::u32::*;
 
 pub type Position = Vec3;
 

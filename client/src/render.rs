@@ -1,14 +1,9 @@
 mod shaders;
 pub use shaders::Shaders;
 
-mod object;
-pub use object::{Object, Transform};
-
-mod mesh;
-pub use mesh::{Mesh, MeshData, MeshVert};
-
-mod texture;
-pub use texture::Texture;
+pub mod mesh;
+pub mod object;
+pub mod sprite;
 
 mod cam;
 pub use cam::Camera;
@@ -24,4 +19,9 @@ impl core::ops::Deref for RenderContext<'_> {
     fn deref(&self) -> &Self::Target {
         self.gl
     }
+}
+
+pub struct UpdateContext<'a> {
+    pub cam: &'a mut Camera,
+    pub dt: f32,
 }

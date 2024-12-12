@@ -1,4 +1,4 @@
-use crate::render::Transform;
+use crate::render::object::Transform;
 use common::types::*;
 use glow::*;
 
@@ -9,10 +9,30 @@ pub struct Camera {
     fov_rad: f32,
 }
 
+pub struct CameraUniforms {
+    pub view: UniformLocation,
+    pub proj: UniformLocation,
+}
+
+impl CameraUniforms {
+    pub fn from_program(gl: &Context, program: Program) -> Self {
+        let view = unsafe {
+            gl.get_uniform_location(program, "view")
+                .expect("shader has uniform proj")
+        };
+        let proj = unsafe {
+            gl.get_uniform_location(program, "proj")
+                .expect("shader has uniform proj")
+        };
+
+        Self { view, proj }
+    }
+}
+
 impl Camera {
-    pub fn new(transform: Transform, fov: f32, viewport: Vec2) -> Self {
+    pub fn new(fov: f32, viewport: Vec2) -> Self {
         let mut cam = Self {
-            transform,
+            transform: Transform::new(),
             proj: Mat4::default(),
             fov_rad: fov.to_radians(),
         };
@@ -37,15 +57,14 @@ impl Camera {
         Mat4::look_to_rh(self.transform.pos, direction, Vec3::new(0.0, 1.0, 0.0))
     }
 
-    pub fn bind_proj(&self, gl: &Context, loc: &UniformLocation) {
+    pub fn bind(&self, gl: &Context, uniforms: &CameraUniforms) {
         unsafe {
-            gl.uniform_matrix_4_f32_slice(Some(loc), false, &self.proj.to_cols_array());
-        }
-    }
-
-    pub fn bind_view(&self, gl: &Context, loc: &UniformLocation) {
-        unsafe {
-            gl.uniform_matrix_4_f32_slice(Some(loc), false, &self.view().to_cols_array());
+            gl.uniform_matrix_4_f32_slice(Some(&uniforms.proj), false, &self.proj.to_cols_array());
+            gl.uniform_matrix_4_f32_slice(
+                Some(&uniforms.view),
+                false,
+                &self.view().to_cols_array(),
+            );
         }
     }
 }

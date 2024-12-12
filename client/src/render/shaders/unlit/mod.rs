@@ -1,34 +1,36 @@
 use super::load;
-use crate::render::{Mesh, Object, RenderContext};
+use crate::render::{
+    cam::CameraUniforms,
+    mesh::Mesh,
+    object::Object,
+    sprite::{Billboard, SpriteSheetUniforms},
+    RenderContext,
+};
 use glow::*;
 
 pub struct UnlitShader {
     program: Program,
+
     model_loc: UniformLocation,
-    view_loc: UniformLocation,
-    proj_loc: UniformLocation,
+    camera_uniforms: CameraUniforms,
+    sprite_sheet_uniforms: SpriteSheetUniforms,
 }
 
 impl UnlitShader {
     pub(super) fn new(gl: &Context) -> Self {
         let program = load(gl, "unlit");
 
-        let (model_loc, view_loc, proj_loc) = unsafe {
-            (
-                gl.get_uniform_location(program, "model")
-                    .expect("shader has uniform model"),
-                gl.get_uniform_location(program, "view")
-                    .expect("shader has uniform view"),
-                gl.get_uniform_location(program, "proj")
-                    .expect("shader has uniform proj"),
-            )
+        let model_loc = unsafe {
+            gl.get_uniform_location(program, "model")
+                .expect("shader has uniform model")
         };
 
         Self {
             program,
+
             model_loc,
-            view_loc,
-            proj_loc,
+            camera_uniforms: CameraUniforms::from_program(gl, program),
+            sprite_sheet_uniforms: SpriteSheetUniforms::from_program(gl, program),
         }
     }
 
@@ -42,10 +44,11 @@ impl UnlitShader {
         let obj_transform = obj.as_ref();
         unsafe {
             ctx.use_program(Some(self.program));
-            mesh.bind(ctx);
+
+            mesh.bind(ctx, &self.sprite_sheet_uniforms);
+            ctx.cam.bind(ctx, &self.camera_uniforms);
             obj_transform.bind(ctx, &self.model_loc);
-            ctx.cam.bind_view(ctx, &self.view_loc);
-            ctx.cam.bind_proj(ctx, &self.proj_loc);
+
             ctx.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_BYTE, 0);
         }
     }
@@ -54,5 +57,55 @@ impl UnlitShader {
 impl std::fmt::Debug for UnlitShader {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> core::fmt::Result {
         f.debug_struct("UnlitShader").finish()
+    }
+}
+
+pub struct BillboardShader {
+    program: Program,
+
+    model_loc: UniformLocation,
+    camera_uniforms: CameraUniforms,
+    sprite_sheet_uniforms: SpriteSheetUniforms,
+}
+
+impl BillboardShader {
+    pub(super) fn new(gl: &Context) -> Self {
+        let program = load(gl, "unlit");
+
+        let model_loc = unsafe {
+            gl.get_uniform_location(program, "model")
+                .expect("shader has uniform model")
+        };
+
+        Self {
+            program,
+
+            model_loc,
+            camera_uniforms: CameraUniforms::from_program(gl, program),
+            sprite_sheet_uniforms: SpriteSheetUniforms::from_program(gl, program),
+        }
+    }
+
+    pub(super) fn cleanup(&self, gl: &Context) {
+        unsafe {
+            gl.delete_program(self.program);
+        }
+    }
+
+    pub fn render(&self, ctx: &RenderContext, obj: &Billboard) {
+        unsafe {
+            ctx.use_program(Some(self.program));
+
+            obj.bind(ctx, &self.model_loc, &self.sprite_sheet_uniforms);
+            ctx.cam.bind(ctx, &self.camera_uniforms);
+
+            ctx.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_BYTE, 0);
+        }
+    }
+}
+
+impl std::fmt::Debug for BillboardShader {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> core::fmt::Result {
+        f.debug_struct("BillboardShader").finish()
     }
 }

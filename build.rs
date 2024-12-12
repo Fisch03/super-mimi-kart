@@ -7,6 +7,7 @@ const WEB_CLIENT_DIR: &str = "./client";
 const STATIC_GAME_DIR: &str = "./static/game";
 
 fn main() {
+    println!("cargo:rerun-if-changed=assets//");
     build_client();
 }
 

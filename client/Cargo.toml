@@ -18,12 +18,16 @@ common = { path = "../common" }
 version = "0.3" 
 features = [
     "Document",
-    "HtmlCanvasElement", 
-    "WebGl2RenderingContext", 
     "Window",
-    "WebSocket",
     "Location",
-    "Performance"
+    "HtmlCanvasElement", 
+
+    "Performance",
+    "Event",
+    "KeyboardEvent",
+
+    "WebSocket",
+    "WebGl2RenderingContext", 
 ]
 
 [dependencies.image]
