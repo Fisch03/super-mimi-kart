@@ -3,19 +3,21 @@ use std::{
     process::Command,
 };
 
-const WEB_CLIENT_DIR: &str = "./client";
-const STATIC_GAME_DIR: &str = "./static/game";
-
 fn main() {
-    println!("cargo:rerun-if-changed=assets//");
-    build_client();
+    println!("cargo:rerun-if-changed=assets/");
+    std::fs::remove_dir_all("./static").unwrap_or(());
+    std::fs::create_dir_all("./static/assets").unwrap();
+    copy_dir(Path::new("assets"), Path::new("./static/assets"));
+
+    build_wasm_pkg("game/", "./static/game");
+    build_wasm_pkg("editor/", "./static/editor");
 }
 
-fn build_client() {
-    let web_client_dir = Path::new(WEB_CLIENT_DIR);
-    println!("cargo:rerun-if-changed={}", WEB_CLIENT_DIR);
+fn build_wasm_pkg(in_dir: &str, pkg_out_dir: &str) {
+    println!("cargo:rerun-if-changed={}", in_dir);
+    let in_dir = Path::new(in_dir);
 
-    let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
+    let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("in_dir");
     let profile = std::env::var("PROFILE").unwrap();
 
     // build the web client
@@ -29,24 +31,21 @@ fn build_client() {
             build_wasm.arg("--debug");
         }
 
-        build_wasm.arg("--out-dir").arg(&out_dir.join("pkg"));
+        build_wasm.arg("--out-dir").arg(&out_dir);
         build_wasm.arg("--target").arg("web");
         build_wasm.env("CARGO_TARGET_DIR", &out_dir.join("target"));
-        build_wasm.current_dir(web_client_dir);
+        build_wasm.current_dir(in_dir);
         let status = build_wasm.status().unwrap();
 
         assert!(status.success(), "Failed to build web client");
     }
 
     // copy client files to server
-    let server_asset_dir = Path::new(STATIC_GAME_DIR);
+    let server_asset_dir = Path::new(pkg_out_dir);
 
-    std::fs::remove_dir_all(&server_asset_dir).unwrap_or(()); // remove old files
     std::fs::create_dir_all(&server_asset_dir).unwrap();
-    copy_dir(&out_dir.join("pkg"), &server_asset_dir);
-    copy_dir(&web_client_dir.join("static"), &server_asset_dir);
-
-    println!("cargo:rerun-if-changed={}", WEB_CLIENT_DIR);
+    copy_dir(&out_dir, &server_asset_dir);
+    copy_dir(&in_dir.join("static"), &server_asset_dir);
 }
 
 fn copy_dir(src: &Path, dest: &Path) {

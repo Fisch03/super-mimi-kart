@@ -143,7 +143,9 @@ impl SpriteSheet {
         let mut sheet =
             ImageBuffer::new(sprite_dimension.x * imgs.len() as u32, sprite_dimension.y);
         imgs.iter().enumerate().for_each(|(i, img)| {
-            sheet.copy_from(img, sprite_dimension.x * i as u32, 0);
+            sheet
+                .copy_from(img, sprite_dimension.x * i as u32, 0)
+                .unwrap();
         });
 
         Self::from_image(

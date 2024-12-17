@@ -30,13 +30,15 @@ async fn main() {
     let app = Router::new();
 
     let serve_game_dir = ServeDir::new("./static/game").append_index_html_on_directories(true);
-    let serve_shared_dir = ServeDir::new("./static/shared");
+    let serve_editor_dir = ServeDir::new("./static/editor").append_index_html_on_directories(true);
+    let serve_assets_dir = ServeDir::new("./static/assets").append_index_html_on_directories(false);
 
     let state = Arc::new(GameServer {});
 
     let app = app
         .route("/ws", get(ws_handler))
-        .nest_service("/shared", serve_shared_dir)
+        .nest_service("/editor", serve_editor_dir)
+        .nest_service("/assets", serve_assets_dir)
         .fallback_service(serve_game_dir)
         .with_state(state);
 

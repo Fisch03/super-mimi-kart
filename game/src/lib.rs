@@ -6,7 +6,7 @@ use web_sys::WebSocket;
 mod game;
 use game::Game;
 
-mod render;
+mod engine;
 
 #[macro_export]
 macro_rules! console_log {
@@ -31,8 +31,6 @@ extern "C" {
 pub fn start() {
     std::panic::set_hook(Box::new(console_error_panic_hook::hook));
 
-    console_log!("hello world!");
-
     let window = web_sys::window().unwrap();
     let performance = window.performance().unwrap();
 
@@ -43,6 +41,19 @@ pub fn start() {
         .unwrap()
         .dyn_into::<web_sys::HtmlCanvasElement>()
         .unwrap();
+
+    let dim = Vec2::new(
+        window.inner_width().unwrap().as_f64().unwrap() as f32,
+        window.inner_height().unwrap().as_f64().unwrap() as f32,
+    );
+
+    let scale = dim / Vec2::new(480.0, 240.0);
+    let scale = scale.x.max(scale.y).floor().max(1.0);
+
+    let dim = dim / scale;
+
+    canvas.set_width(dim.x as u32);
+    canvas.set_height(dim.y as u32);
 
     let webgl2_context = canvas
         .get_context("webgl2")
@@ -65,7 +76,6 @@ pub fn start() {
         WebSocket::new(&format!("{}://{}/ws", ws_protocol, server_host)).unwrap()
     };
 
-    let dim = Vec2::new(canvas.width() as f32, canvas.height() as f32);
     let game = Rc::new(RefCell::new(Game::new(ws, gl, dim)));
     let mut time = performance.now();
 
@@ -85,47 +95,56 @@ pub fn start() {
         }) as Box<dyn FnMut()>));
     }
 
-    // --- resize ---
-    {
-        let game_clone = game.clone();
-        let on_resize = Closure::<dyn FnMut(_)>::new(move |_: web_sys::Event| {
-            let inner_width = window.inner_width().unwrap().as_f64().unwrap();
-            let inner_height = window.inner_height().unwrap().as_f64().unwrap();
+    type GameRef<'a> = &'a Rc<RefCell<Game>>;
+    macro_rules! add_event_listener {
+        ($event:literal, $evt_type:ty, $f:expr) => {
+            let game_clone = game.clone();
+            let on_event = Closure::<dyn FnMut(_)>::new(move |e: $evt_type| {
+                $f(&game_clone, e);
+            });
 
-            let scale_x = inner_width / 480.0;
-            let scale_y = inner_height / 240.0;
-            let scale = scale_x.max(scale_y).floor().max(1.0);
+            web_sys::window()
+                .unwrap()
+                .add_event_listener_with_callback($event, on_event.as_ref().unchecked_ref())
+                .unwrap();
 
-            let width = inner_width / scale;
-            let height = inner_height / scale;
-
-            canvas.set_width(width as u32);
-            canvas.set_height(height as u32);
-
-            game_clone
-                .borrow_mut()
-                .resize(Vec2::new(width as f32, height as f32));
-        });
-        add_event_listener("resize", on_resize);
+            on_event.forget();
+        };
     }
+
+    // --- resize ---
+    add_event_listener!("resize", web_sys::Event, |game: GameRef, _| {
+        let dim = Vec2::new(
+            window.inner_width().unwrap().as_f64().unwrap() as f32,
+            window.inner_height().unwrap().as_f64().unwrap() as f32,
+        );
+
+        let scale = dim / Vec2::new(480.0, 240.0);
+        let scale = scale.x.max(scale.y).floor().max(1.0);
+
+        let dim = dim / scale;
+
+        canvas.set_width(dim.x as u32);
+        canvas.set_height(dim.y as u32);
+
+        game.borrow_mut().resize(dim)
+    });
 
     // --- input ---
-    {
-        let game_clone = game.clone();
-        let on_key_down =
-            Closure::<dyn FnMut(web_sys::KeyboardEvent)>::new(move |e: web_sys::KeyboardEvent| {
-                game_clone.borrow_mut().key_down(e.code());
-            });
-        add_event_listener("keydown", on_key_down);
-    }
-    {
-        let game_clone = game.clone();
-        let on_key_down =
-            Closure::<dyn FnMut(web_sys::KeyboardEvent)>::new(move |e: web_sys::KeyboardEvent| {
-                game_clone.borrow_mut().key_up(e.code());
-            });
-        add_event_listener("keyup", on_key_down);
-    }
+    add_event_listener!(
+        "keydown",
+        web_sys::KeyboardEvent,
+        |game: GameRef, e: web_sys::KeyboardEvent| {
+            game.borrow_mut().key_down(e.code());
+        }
+    );
+    add_event_listener!(
+        "keyup",
+        web_sys::KeyboardEvent,
+        |game: GameRef, e: web_sys::KeyboardEvent| {
+            game.borrow_mut().key_up(e.code());
+        }
+    );
 
     request_animation_frame(main_loop.borrow().as_ref().unwrap());
 }
@@ -135,15 +154,4 @@ fn request_animation_frame(f: &Closure<dyn FnMut()>) {
         .unwrap()
         .request_animation_frame(f.as_ref().unchecked_ref())
         .unwrap();
-}
-
-fn add_event_listener<T>(event: &str, f: Closure<dyn FnMut(T)>)
-where
-    T: FromWasmAbi + 'static,
-{
-    web_sys::window()
-        .unwrap()
-        .add_event_listener_with_callback(event, f.as_ref().unchecked_ref())
-        .unwrap();
-    f.forget();
 }

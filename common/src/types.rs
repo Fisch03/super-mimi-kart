@@ -1,3 +1,4 @@
+pub use geo::Line;
 pub use glam::f32::*;
 pub use glam::u32::*;
 

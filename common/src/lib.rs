@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+pub mod map;
 pub mod types;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]

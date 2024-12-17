@@ -1,6 +1,6 @@
 use include_dir::{include_dir, Dir};
 
-use crate::render::mesh::{MeshData, MeshVert};
+use crate::engine::mesh::{MeshData, MeshVert};
 
 static SPRITE_ASSETS: Dir = include_dir!("$CARGO_MANIFEST_DIR/../assets");
 

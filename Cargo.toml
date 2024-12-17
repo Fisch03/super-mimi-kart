@@ -15,6 +15,5 @@ common = { path = "common" }
 [workspace]
 resolver = "2"
 members = ["common"]
-exclude = ["client"]
-
+exclude = ["game", "editor"]
 

@@ -1,4 +1,4 @@
-use crate::render::{RenderContext, UpdateContext};
+use crate::engine::{RenderContext, UpdateContext};
 use glow::*;
 
 use common::types::*;

@@ -1,6 +1,6 @@
 use glow::*;
 
-use crate::render::sprite::{SpriteSheet, SpriteSheetUniforms};
+use crate::engine::sprite::{SpriteSheet, SpriteSheetUniforms};
 
 #[derive(bytemuck::Pod, bytemuck::Zeroable, Clone, Copy)]
 #[repr(C)]

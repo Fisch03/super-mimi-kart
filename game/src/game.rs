@@ -1,9 +1,8 @@
 use common::types::*;
 use glow::*;
-use std::collections::HashSet;
 use web_sys::WebSocket;
 
-use crate::render::{
+use crate::engine::{
     object::{Object, Transform},
     Camera, RenderContext, Shaders, UpdateContext,
 };

@@ -1,7 +1,7 @@
 use glow::*;
 use include_dir::{include_dir, Dir};
 
-static SHADERS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/src/render/shaders");
+static SHADERS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/src/engine/shaders");
 
 mod unlit;
 

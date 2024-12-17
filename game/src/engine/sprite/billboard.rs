@@ -1,4 +1,4 @@
-use crate::render::{
+use crate::engine::{
     mesh::Mesh,
     object::Transform,
     sprite::{SpriteSheet, SpriteSheetUniforms, SPRITE_QUAD},
@@ -15,10 +15,6 @@ pub struct Billboard {
 }
 
 impl Billboard {
-    pub fn mesh(&self) -> &Mesh {
-        &self.mesh
-    }
-
     pub fn new(gl: &Context, sheet: SpriteSheet) -> Self {
         let aspect = sheet.sprite_dimensions().x as f32 / sheet.sprite_dimensions().y as f32;
 
