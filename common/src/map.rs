@@ -1,5 +1,5 @@
 use crate::types::*;
-use geo::{prelude::*, Closest, Line};
+use geo::{prelude::*, Closest, Line, Polygon};
 use serde::{Deserialize, Serialize};
 use std::collections::{vec_deque, VecDeque};
 
@@ -7,6 +7,7 @@ use std::collections::{vec_deque, VecDeque};
 pub struct Map {
     pub metadata: Metadata,
     pub track: Track,
+    pub colliders: Vec<Collider>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -139,6 +140,29 @@ impl Default for Track {
             ]),
             start_offset_h: 20.0,
             start_offset_v: 15.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Collider {
+    pub shape: Polygon<f32>,
+}
+
+impl Default for Collider {
+    fn default() -> Self {
+        Self {
+            shape: Polygon::new(
+                vec![
+                    (-100.0, -100.0),
+                    (100.0, -100.0),
+                    (100.0, 100.0),
+                    (-100.0, 100.0),
+                    (-100.0, -100.0),
+                ]
+                .into(),
+                vec![],
+            ),
         }
     }
 }

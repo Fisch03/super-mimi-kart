@@ -1,8 +1,8 @@
-use common::{map::Map, types::Line};
+use common::map::Map;
 use egui::{CentralPanel, SidePanel, TopBottomPanel};
 
-mod left_panel;
 mod map_view;
+mod properties_panel;
 
 pub struct Editor {
     map: Map,
@@ -12,6 +12,10 @@ pub struct Editor {
 impl Editor {
     #[allow(dead_code)]
     pub fn new(cc: &eframe::CreationContext) -> Self {
+        let mut fonts = egui::FontDefinitions::default();
+        egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Bold);
+        cc.egui_ctx.set_fonts(fonts);
+
         egui_extras::install_image_loaders(&cc.egui_ctx);
 
         Self {
@@ -31,7 +35,9 @@ impl eframe::App for Editor {
                 egui::menu::bar(ui, |ui| {
                     ui.menu_button("File", |ui| {
                         if ui.button("New").clicked() {
+                            // TODO: ask for confirmation if there are unsaved changes
                             self.map = Map::default();
+                            self.view = map_view::View::default();
                         }
                         if ui.button("Open").clicked() {
                             log::warn!("todo: open map file");
@@ -44,15 +50,27 @@ impl eframe::App for Editor {
             });
         });
 
-        SidePanel::left("left_panel")
+        SidePanel::left("tools_panel")
+            .min_width(0.0)
+            .default_width(0.0)
+            .resizable(false)
             .frame(
                 egui::Frame::default()
                     .inner_margin(egui::Margin::same(10.0))
                     .fill(ctx.style().visuals.window_fill()),
             )
-            .min_width(250.0)
             .show(ctx, |ui| {
-                left_panel::show(ui, &mut self.map);
+                self.view.show_tools(ui, &mut self.map);
+            });
+
+        SidePanel::right("properties_panel")
+            .frame(
+                egui::Frame::default()
+                    .inner_margin(egui::Margin::same(10.0))
+                    .fill(ctx.style().visuals.window_fill()),
+            )
+            .show(ctx, |ui| {
+                self.show_properties(ui);
             });
 
         CentralPanel::default().show(ctx, |ui| {

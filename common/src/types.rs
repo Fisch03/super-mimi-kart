@@ -1,6 +1,26 @@
-pub use geo::Line;
+pub use geo::{prelude::*, Line};
+use geo::Closest;
 pub use glam::f32::*;
 pub use glam::u32::*;
+
+pub fn line_distance(line: &Line<f32>, point: Vec2) -> f32 {
+    Euclidean::distance(
+        line,
+        geo::Coord {
+            x: point.x,
+            y: point.y,
+        },
+    )
+}
+
+pub fn closest_point_on_line(line: &Line<f32>, point: Vec2) -> Vec2 {
+    let closest = line.closest_point(&geo::Point::new(point.x, point.y));
+    match closest {
+        Closest::Intersection(point) => Vec2::new(point.x(), point.y()),
+        Closest::SinglePoint(point) => Vec2::new(point.x(), point.y()),
+        Closest::Indeterminate => panic!("indeterminate closest point"),
+    }
+}
 
 pub type Position = Vec3;
 

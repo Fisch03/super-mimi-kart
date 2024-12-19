@@ -7,13 +7,14 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-egui = "0.29"
-eframe = { version = "0.29", default-features = false, features = ["glow"] }
+egui = "0.30"
+eframe = { version = "0.30", default-features = false, features = ["glow"] }
 wasm-bindgen = { version = "0.2" }
 common = { path = "../common" }
 log = "0.4.22"
 wasm-bindgen-futures = "0.4.49"
-egui_extras = { version = "0.29", features = ["http", "image"] }
+egui_extras = { version = "0.30", features = ["http", "image"] }
+egui-phosphor = { version = "0.8.0", default-features = false, features = ["bold"] }
 
 [dependencies.web-sys]
 version = "0.3" 
