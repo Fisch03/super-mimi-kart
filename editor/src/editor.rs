@@ -26,7 +26,7 @@ impl Editor {
 }
 
 impl eframe::App for Editor {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         TopBottomPanel::top("menu_bar").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.heading("Map Editor");
@@ -73,8 +73,10 @@ impl eframe::App for Editor {
                 self.show_properties(ui);
             });
 
-        CentralPanel::default().show(ctx, |ui| {
-            self.view.show(ui, &mut self.map);
-        });
+        CentralPanel::default()
+            .frame(egui::Frame::default().inner_margin(egui::Margin::same(10.0)))
+            .show(ctx, |ui| {
+                self.view.show(ui, &mut self.map);
+            });
     }
 }

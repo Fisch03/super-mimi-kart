@@ -1,26 +1,5 @@
-pub use geo::{prelude::*, Line};
-use geo::Closest;
 pub use glam::f32::*;
 pub use glam::u32::*;
-
-pub fn line_distance(line: &Line<f32>, point: Vec2) -> f32 {
-    Euclidean::distance(
-        line,
-        geo::Coord {
-            x: point.x,
-            y: point.y,
-        },
-    )
-}
-
-pub fn closest_point_on_line(line: &Line<f32>, point: Vec2) -> Vec2 {
-    let closest = line.closest_point(&geo::Point::new(point.x, point.y));
-    match closest {
-        Closest::Intersection(point) => Vec2::new(point.x(), point.y()),
-        Closest::SinglePoint(point) => Vec2::new(point.x(), point.y()),
-        Closest::Indeterminate => panic!("indeterminate closest point"),
-    }
-}
 
 pub type Position = Vec3;
 
@@ -76,5 +55,57 @@ impl std::ops::Sub<Rotation> for Rotation {
     type Output = Rotation;
     fn sub(self, rhs: Rotation) -> Rotation {
         Rotation(self.0 - rhs.0)
+    }
+}
+
+pub struct Segment {
+    pub start: Vec2,
+    pub end: Vec2,
+}
+
+impl Segment {
+    pub fn new(start: Vec2, end: Vec2) -> Self {
+        Self { start, end }
+    }
+
+    pub fn dx(&self) -> f32 {
+        self.end.x - self.start.x
+    }
+
+    pub fn dy(&self) -> f32 {
+        self.end.y - self.start.y
+    }
+
+    pub fn length(&self) -> f32 {
+        self.start.distance(self.end)
+    }
+
+    pub fn distance(&self, point: Vec2) -> f32 {
+        let closest = self.closest_point(point);
+        closest.distance(point)
+    }
+
+    pub fn closest_point(&self, point: Vec2) -> Vec2 {
+        let length = self.length();
+        if length == 0.0 {
+            return self.start;
+        }
+
+        let dir = self.end - self.start;
+        let to_point = point - self.start;
+
+        let t = to_point.dot(dir) / dir.dot(dir);
+
+        if t <= 0.0 {
+            return self.start;
+        } else if t >= 1.0 {
+            return self.end;
+        } else {
+            return self.start + dir * t;
+        }
+    }
+
+    pub fn interpolate(&self, t: f32) -> Vec2 {
+        self.start + (self.end - self.start) * t
     }
 }

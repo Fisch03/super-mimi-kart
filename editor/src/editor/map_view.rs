@@ -2,10 +2,12 @@ use common::map::Map;
 use common::types::*;
 use egui::{
     epaint::{CircleShape, PathShape},
-    pos2, vec2, Color32, Rect, Sense, Shape, Spinner, TextureFilter, TextureOptions,
+    pos2, vec2, Color32, Grid, Rect, Sense, Shape, Spinner, TextureFilter, TextureOptions, Window,
 };
 
-mod selection_window;
+pub mod selection;
+pub use selection::{SegmentSelect, Select, Selection};
+// mod selection_window;
 mod tools;
 mod view_settings;
 
@@ -17,28 +19,6 @@ pub struct View {
     dragging_selection: bool,
 
     start_viz_amt: usize,
-}
-
-#[derive(Debug, Eq, PartialEq)]
-enum Selection {
-    None,
-    Point(usize),
-    Segment(usize),
-
-    ColliderPoint(usize, usize),
-    ColliderSegment(usize, usize),
-}
-
-impl core::fmt::Display for Selection {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Selection::None => write!(f, "None"),
-            Selection::Point(_) => write!(f, "Track Point"),
-            Selection::Segment(_) => write!(f, "Track Segment"),
-            Selection::ColliderPoint(_, _) => write!(f, "Collider Point"),
-            Selection::ColliderSegment(_, _) => write!(f, "Collider Segment"),
-        }
-    }
 }
 
 impl Default for View {
@@ -61,6 +41,15 @@ impl Default for View {
 }
 
 impl View {
+    pub fn selection(&self) -> Selection {
+        self.selection
+    }
+
+    pub fn select(&mut self, selection: Selection) {
+        self.selection = selection;
+        self.dragging_selection = false;
+    }
+
     pub fn show(&mut self, ui: &mut egui::Ui, map: &mut Map) {
         let (rect, res) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
 
@@ -128,7 +117,7 @@ impl View {
             if let Some(pos) = res.interact_pointer_pos() {
                 let pos = (pos - image_center_screen) / self.zoom;
 
-                let maybe_selection = self.try_select(pos, map);
+                let maybe_selection = self.try_select(Vec2::new(pos.x, pos.y), map);
                 if maybe_selection != Selection::None {
                     self.selection = maybe_selection;
                     self.dragging_selection = true;
@@ -143,72 +132,7 @@ impl View {
         if res.dragged() {
             if self.dragging_selection {
                 let delta = res.drag_delta() / self.zoom;
-                match self.selection {
-                    Selection::Point(i) => {
-                        let prev_i = (i + map.track.path.len() - 1) % map.track.path.len();
-
-                        let prev = &mut map.track.path[prev_i];
-                        prev.line.end.x += delta.x;
-                        prev.line.end.y += delta.y;
-                        let segment = &mut map.track.path[i];
-                        segment.line.start.x += delta.x;
-                        segment.line.start.y += delta.y;
-                    }
-                    Selection::Segment(i) => {
-                        let prev_i = (i + map.track.path.len() - 1) % map.track.path.len();
-                        let next_i = (i + 1) % map.track.path.len();
-
-                        let prev = &mut map.track.path[prev_i];
-                        prev.line.end.x += delta.x;
-                        prev.line.end.y += delta.y;
-                        let segment = &mut map.track.path[i];
-                        segment.line.start.x += delta.x;
-                        segment.line.start.y += delta.y;
-                        segment.line.end.x += delta.x;
-                        segment.line.end.y += delta.y;
-                        let next = &mut map.track.path[next_i];
-                        next.line.start.x += delta.x;
-                        next.line.start.y += delta.y;
-                    }
-                    Selection::ColliderPoint(c_i, p_i) => {
-                        let collider = &mut map.colliders[c_i];
-                        collider.shape.exterior_mut(|ext| {
-                            let point = &mut ext.0[p_i];
-                            point.x += delta.x;
-                            point.y += delta.y;
-
-                            if p_i == ext.0.len() - 1 {
-                                let first = &mut ext.0[0];
-                                first.x += delta.x;
-                                first.y += delta.y;
-                            }
-                        });
-                    }
-                    Selection::ColliderSegment(c_i, s_i) => {
-                        let collider = &mut map.colliders[c_i];
-                        collider.shape.exterior_mut(|ext| {
-                            let p_1 = &mut ext.0[s_i];
-                            p_1.x += delta.x;
-                            p_1.y += delta.y;
-
-                            let p_2 = &mut ext.0[s_i - 1];
-                            p_2.x += delta.x;
-                            p_2.y += delta.y;
-
-                            let len = ext.0.len();
-                            if s_i == len - 1 {
-                                let first = &mut ext.0[0];
-                                first.x += delta.x;
-                                first.y += delta.y;
-                            } else if s_i == 1 {
-                                let last = &mut ext.0[len - 1];
-                                last.x += delta.x;
-                                last.y += delta.y;
-                            }
-                        });
-                    }
-                    Selection::None => {}
-                }
+                self.selection.translate(map, Vec2::new(delta.x, delta.y));
             } else {
                 self.pan -= res.drag_delta();
             }
@@ -218,48 +142,18 @@ impl View {
             let click_pos = res.interact_pointer_pos().unwrap_or_default();
             let click_pos = (click_pos - image_center_screen) / self.zoom;
 
-            match self.selection {
-                Selection::Segment(i) => {
-                    let closest =
-                        map.track.path[i].closest_point(Vec2::new(click_pos.x, click_pos.y));
+            if let Some(s) = self.selection.as_segment() {
+                let closest = s
+                    .segment(map)
+                    .closest_point(Vec2::new(click_pos.x, click_pos.y));
 
-                    let end = map.track.path[i].line.end;
-                    map.track.path[i].line.end = (closest.x, closest.y).into();
-                    map.track.path.insert(
-                        i + 1,
-                        common::map::Segment::new(
-                            Vec2::new(closest.x, closest.y),
-                            Vec2::new(end.x, end.y),
-                        ),
-                    );
-
-                    self.selection = Selection::Point(i + 1);
-                }
-                Selection::ColliderSegment(c_i, s_i) => {
-                    let collider = &mut map.colliders[c_i];
-                    let p_1 = collider.shape.exterior().0[s_i];
-                    let p_2 = collider.shape.exterior().0[s_i - 1];
-                    let segment = Line::new((p_1.x, p_1.y), (p_2.x, p_2.y));
-                    let closest =
-                        closest_point_on_line(&segment, Vec2::new(click_pos.x, click_pos.y));
-
-                    let len = collider.shape.exterior().0.len();
-                    collider.shape.exterior_mut(|ext| {
-                        ext.0.insert(s_i, (closest.x, closest.y).into());
-                        if s_i == len - 1 {
-                            ext.0.push(ext.0[0]);
-                        }
-                    });
-
-                    self.selection = Selection::ColliderPoint(c_i, s_i);
-                }
-                _ => {}
+                s.insert_point(map, closest);
             }
         } else if res.clicked() {
             let click_pos = res.interact_pointer_pos().unwrap_or_default();
             let click_pos = (click_pos - image_center_screen) / self.zoom;
 
-            self.selection = self.try_select(click_pos, map);
+            self.selection = self.try_select(Vec2::new(click_pos.x, click_pos.y), map);
         }
 
         ui.painter().image(
@@ -282,14 +176,12 @@ impl View {
                 let polygon = Shape::Path(PathShape::convex_polygon(
                     collider
                         .shape
-                        .exterior()
-                        .points()
+                        .iter()
                         .enumerate()
-                        .skip(1)
                         .map(|(p_i, p)| {
-                            let p = pos2(p.x(), p.y()) * self.zoom + image_center_screen;
+                            let p = pos2(p.x, p.y) * self.zoom + image_center_screen;
 
-                            let color = if self.selection == Selection::ColliderPoint(c_i, p_i) {
+                            let color = if self.selection == Selection::collider_point(c_i, p_i) {
                                 Color32::RED
                             } else {
                                 Color32::WHITE
@@ -312,17 +204,12 @@ impl View {
                 ui.painter().add(polygon);
 
                 match self.selection {
-                    Selection::ColliderSegment(c_i, s_i) if c_i == c_i => {
-                        let p_1 = pos2(
-                            collider.shape.exterior().0[s_i].x,
-                            collider.shape.exterior().0[s_i].y,
-                        ) * self.zoom
+                    Selection::ColliderSegment(s) if s.collider.0 == c_i => {
+                        let segment = s.segment(map);
+                        let p_1 = pos2(segment.start.x, segment.start.y) * self.zoom
                             + image_center_screen;
-                        let p_2 = pos2(
-                            collider.shape.exterior().0[s_i - 1].x,
-                            collider.shape.exterior().0[s_i - 1].y,
-                        ) * self.zoom
-                            + image_center_screen;
+                        let p_2 =
+                            pos2(segment.end.x, segment.end.y) * self.zoom + image_center_screen;
 
                         ui.painter().add(Shape::LineSegment {
                             points: [p_1, p_2],
@@ -333,79 +220,120 @@ impl View {
                 }
             });
 
-        map.track.path.iter().enumerate().for_each(|(i, segment)| {
-            let start =
-                pos2(segment.line.start.x, segment.line.start.y) * self.zoom + image_center_screen;
-            let end =
-                pos2(segment.line.end.x, segment.line.end.y) * self.zoom + image_center_screen;
+        map.track
+            .path
+            .windows(2)
+            .map(|points| (&points[0], &points[1]))
+            .chain(std::iter::once((
+                map.track.path.last().unwrap(),
+                map.track.path.first().unwrap(),
+            )))
+            .enumerate()
+            .for_each(|(i, (start, end))| {
+                let start = pos2(start.pos.x, start.pos.y) * self.zoom + image_center_screen;
+                let end = pos2(end.pos.x, end.pos.y) * self.zoom + image_center_screen;
 
-            let line_color = if self.selection == Selection::Segment(i) {
-                Color32::RED
-            } else {
-                Color32::WHITE
-            };
-            let cp_color = if self.selection == Selection::Point(i) {
-                Color32::RED
-            } else {
-                if i == 0 {
-                    Color32::GREEN
+                let line_color = if self.selection == Selection::track_segment(i) {
+                    Color32::RED
                 } else {
                     Color32::WHITE
-                }
-            };
+                };
+                let cp_color = if self.selection == Selection::track_point(i) {
+                    Color32::RED
+                } else {
+                    if i == 0 {
+                        Color32::GREEN
+                    } else {
+                        Color32::WHITE
+                    }
+                };
 
-            ui.painter().add(Shape::LineSegment {
-                points: [start, end],
-                stroke: (3.0, line_color).into(),
+                ui.painter().add(Shape::LineSegment {
+                    points: [start, end],
+                    stroke: (3.0, line_color).into(),
+                });
+                circles.push(Shape::Circle(CircleShape {
+                    center: start,
+                    radius: 5.0,
+                    fill: cp_color,
+                    stroke: (1.0, Color32::BLACK).into(),
+                }));
             });
-            circles.push(Shape::Circle(CircleShape {
-                center: start,
-                radius: 5.0,
-                fill: cp_color,
-                stroke: (1.0, Color32::BLACK).into(),
-            }));
-        });
 
         ui.painter().extend(circles);
 
         if self.selection != Selection::None {
-            self.show_selection_window(ui, map, rect);
+            Window::new(self.selection.to_string())
+                .id(egui::Id::new("selection"))
+                .constrain_to(rect)
+                .anchor(egui::Align2::RIGHT_BOTTOM, vec2(-20.0, -20.0))
+                .resizable(false)
+                .collapsible(false)
+                .movable(false)
+                .show(ui.ctx(), |ui| {
+                    Grid::new("metadata_grid").num_columns(2).show(ui, |ui| {
+                        self.selection.edit_ui(map, ui);
+                    });
+                });
         }
     }
 
-    fn try_select(&mut self, pos: egui::Pos2, map: &Map) -> Selection {
+    fn try_select(&mut self, pos: Vec2, map: &Map) -> Selection {
         let tolerance = 15.0 / self.zoom;
 
-        for (i, segment) in map.track.path.iter().enumerate() {
-            let start = pos2(segment.line.start.x, segment.line.start.y);
-            let end = pos2(segment.line.end.x, segment.line.end.y);
-            let start_dist = (start - pos).length();
-            let end_dist = (end - pos).length();
-            let segment_dist = segment.distance(common::types::Vec2::new(pos.x, pos.y));
+        for (i, (start, end)) in map
+            .track
+            .path
+            .windows(2)
+            .map(|points| (&points[0], &points[1]))
+            .chain(std::iter::once((
+                map.track.path.last().unwrap(),
+                map.track.path.first().unwrap(),
+            )))
+            .enumerate()
+        {
+            let segment = Segment::new(start.pos, end.pos);
+
+            let start_dist = start.pos.distance(pos);
+            let end_dist = end.pos.distance(pos);
+            let segment_dist = segment.distance(pos);
 
             if start_dist < tolerance && start_dist < segment_dist + tolerance * 5.0 {
-                return Selection::Point(i);
+                return Selection::track_point(i);
             }
             if end_dist < tolerance && end_dist < segment_dist + tolerance * 5.0 {
-                return Selection::Point((i + 1) % map.track.path.len());
+                return Selection::track_point((i + 1) % map.track.path.len());
             }
             if segment_dist < tolerance {
-                return Selection::Segment(i);
+                return Selection::track_segment(i);
             }
         }
 
         for (c_i, collider) in map.colliders.iter().enumerate() {
-            for (p_i, p) in collider.shape.exterior().points().enumerate().skip(1) {
-                let dist = (pos2(p.x(), p.y()) - pos).length();
-                let prev = collider.shape.exterior().0[p_i - 1];
-                let segment = Line::new((prev.x, prev.y), (p.x(), p.y()));
-                let segment_dist = line_distance(&segment, Vec2::new(pos.x, pos.y));
+            for (p_i, (start, end)) in collider
+                .shape
+                .windows(2)
+                .map(|points| (points[0], points[1]))
+                .chain(std::iter::once((
+                    *collider.shape.last().unwrap(),
+                    *collider.shape.first().unwrap(),
+                )))
+                .enumerate()
+            {
+                let segment = Segment::new(start, end);
 
-                if dist < tolerance && dist < segment_dist + tolerance * 5.0 {
-                    return Selection::ColliderPoint(c_i, p_i);
+                let start_dist = start.distance(pos);
+                let end_dist = end.distance(pos);
+                let segment_dist = segment.distance(pos);
+
+                if start_dist < tolerance && start_dist < segment_dist + tolerance * 5.0 {
+                    return Selection::collider_point(c_i, p_i);
+                }
+                if end_dist < tolerance && end_dist < segment_dist + tolerance * 5.0 {
+                    return Selection::collider_point(c_i, (p_i + 1) % collider.shape.len());
                 }
                 if segment_dist < tolerance {
-                    return Selection::ColliderSegment(c_i, p_i);
+                    return Selection::collider_segment(c_i, p_i);
                 }
             }
         }

@@ -1,11 +1,12 @@
-use egui::{Align, Grid, Layout, SliderClamping};
-use super::{Editor};
+use super::{map_view::Selection, Editor};
+use egui::{Grid, SliderClamping, TopBottomPanel};
+use egui_phosphor::bold;
 
 impl Editor {
     pub(super) fn show_properties(&mut self, ui: &mut egui::Ui) {
-        ui.strong("Metadata");
-        ui.add_space(2.0);
+        ui.spacing_mut().item_spacing = egui::vec2(5.0, 5.0);
 
+        ui.strong("Metadata");
         Grid::new("metadata_grid").num_columns(2).show(ui, |ui| {
             ui.label("Name");
             ui.text_edit_singleline(&mut self.map.metadata.name);
@@ -20,13 +21,9 @@ impl Editor {
             ui.end_row();
         });
 
-        ui.add_space(5.0);
         ui.separator();
-        ui.add_space(5.0);
 
         ui.strong("Track");
-        ui.add_space(2.0);
-
         Grid::new("track_grid").num_columns(2).show(ui, |ui| {
             ui.label("Start Offset H");
             ui.add(
@@ -45,10 +42,33 @@ impl Editor {
             ui.end_row();
         });
 
-        ui.with_layout(Layout::bottom_up(Align::default()), |ui| {
-            ui.strong("View Settings");
-            ui.add_space(2.0);
-            self.view.show_view_settings(ui, &mut self.map);
-        });
+        ui.separator();
+
+        for (i, collider) in self.map.colliders.iter().enumerate() {
+            ui.horizontal(|ui| {
+                ui.label("Collider");
+                if ui.button(format!("{}", bold::CURSOR_CLICK)).clicked() {
+                    self.view.select(Selection::collider(i))
+                }
+            });
+
+            ui.strong("Collider");
+            Grid::new("collider_grid").num_columns(2).show(ui, |ui| {});
+        }
+
+        TopBottomPanel::bottom("view_settings")
+            .frame(
+                egui::Frame::default()
+                    .inner_margin(egui::Margin {
+                        top: 10.0,
+                        ..Default::default()
+                    })
+                    .fill(ui.style().visuals.window_fill()),
+            )
+            .show_inside(ui, |ui| {
+                ui.strong("View Settings");
+                ui.add_space(2.0);
+                self.view.show_view_settings(ui, &mut self.map);
+            });
     }
 }
