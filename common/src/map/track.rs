@@ -42,6 +42,12 @@ impl Track {
             end: self.path[(index + 1) % self.path.len()].pos,
         }
     }
+
+    pub fn set_segment(&mut self, index: usize, segment: Segment) {
+        let next_index = (index + 1) % self.path.len();
+        self.path[index].pos = segment.start;
+        self.path[next_index].pos = segment.end;
+    }
 }
 
 impl core::ops::Index<usize> for Track {
@@ -100,8 +106,8 @@ impl<'a> TrackStartIter<'a> {
         self.track.segment(self.index)
     }
 
-    fn next_segment(&mut self) {
-        self.index = (self.index + 1) % self.track.path.len();
+    fn prev_segment(&mut self) {
+        self.index = (self.index + self.track.path.len() - 1) % self.track.path.len();
     }
 }
 
@@ -114,7 +120,7 @@ impl<'a> Iterator for TrackStartIter<'a> {
             let segment_length = segment.length();
             if self.offset > segment_length {
                 self.offset -= segment_length;
-                self.next_segment();
+                self.prev_segment();
             } else {
                 let ratio = 1.0 - (self.offset / segment_length);
                 let p = segment.interpolate(ratio);

@@ -1,12 +1,12 @@
-use super::{GeometryType, ObjectType, SegmentSelect, Select, Selection};
+use super::{edit_point, GeometryType, ObjectType, SegmentSelect, Select, Selection};
 use common::{map::Map, types::*};
 
-fn next_index(index: usize, map: &Map) -> usize {
-    (index + 1) % map.colliders.len()
+fn next_index(collider: Collider, index: usize, map: &Map) -> usize {
+    (index + 1) % map.colliders[collider.0].len()
 }
 
-fn prev_index(index: usize, map: &Map) -> usize {
-    (index + map.colliders.len() - 1) % map.colliders.len()
+fn prev_index(collider: Collider, index: usize, map: &Map) -> usize {
+    (index + map.colliders[collider.0].len() - 1) % map.colliders[collider.0].len()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,14 +46,14 @@ impl ColliderPoint {
     pub fn next(&self, map: &Map) -> ColliderPoint {
         ColliderPoint {
             collider: self.collider,
-            p_i: next_index(self.p_i, map),
+            p_i: next_index(self.collider, self.p_i, map),
         }
     }
 
     pub fn prev(&self, map: &Map) -> ColliderPoint {
         ColliderPoint {
             collider: self.collider,
-            p_i: prev_index(self.p_i, map),
+            p_i: prev_index(self.collider, self.p_i, map),
         }
     }
 
@@ -71,6 +71,10 @@ impl Select for ColliderPoint {
 
     fn translate(&self, map: &mut Map, delta: Vec2) {
         *self.get_point(map) += delta;
+    }
+
+    fn edit_ui<'a>(&self, map: &'a mut Map, ui: &mut egui::Ui) {
+        edit_point(ui, self.get_point(map));
     }
 }
 
@@ -91,19 +95,22 @@ impl ColliderSegment {
     pub fn next(&self, map: &Map) -> ColliderSegment {
         ColliderSegment {
             collider: self.collider,
-            s_i: next_index(self.s_i, map),
+            s_i: next_index(self.collider, self.s_i, map),
         }
     }
     pub fn prev(&self, map: &Map) -> ColliderSegment {
         ColliderSegment {
             collider: self.collider,
-            s_i: prev_index(self.s_i, map),
+            s_i: prev_index(self.collider, self.s_i, map),
         }
     }
 }
 impl SegmentSelect for ColliderSegment {
     fn segment(&self, map: &Map) -> Segment {
         map.colliders[self.collider.0].segment(self.s_i)
+    }
+    fn set_segment(&self, map: &mut Map, segment: Segment) {
+        map.colliders[self.collider.0].set_segment(self.s_i, segment);
     }
     fn insert_point(&self, map: &mut Map, pos: Vec2) {
         map.colliders[self.collider.0].insert(self.s_i + 1, pos);
@@ -123,7 +130,21 @@ impl Select for ColliderSegment {
 
     fn translate(&self, map: &mut Map, delta: Vec2) {
         map.colliders[self.collider.0][self.s_i] += delta;
-        let prev_index = prev_index(self.s_i, map);
-        map.colliders[self.collider.0][prev_index] += delta;
+        let next_index = next_index(self.collider, self.s_i, map);
+        map.colliders[self.collider.0][next_index] += delta;
+    }
+
+    fn edit_ui<'a>(&self, map: &'a mut Map, ui: &mut egui::Ui) {
+        let mut segment = self.segment(map);
+
+        ui.strong("Start");
+        ui.end_row();
+        edit_point(ui, &mut segment.start);
+
+        ui.strong("End");
+        ui.end_row();
+        edit_point(ui, &mut segment.end);
+
+        self.set_segment(map, segment);
     }
 }

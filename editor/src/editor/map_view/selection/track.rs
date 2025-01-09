@@ -1,4 +1,4 @@
-use super::{GeometryType, ObjectType, SegmentSelect, Select, Selection};
+use super::{edit_point, GeometryType, ObjectType, SegmentSelect, Select, Selection};
 use common::{
     map::{self, Map},
     types::*,
@@ -31,6 +31,10 @@ impl SegmentSelect for TrackSegment {
         map.track.segment(self.0)
     }
 
+    fn set_segment(&self, map: &mut Map, segment: Segment) {
+        map.track.set_segment(self.0, segment);
+    }
+
     fn insert_point(&self, map: &mut Map, pos: Vec2) {
         map.track.path.insert(self.0 + 1, map::TrackPoint::new(pos));
         // TrackPoint(self.0 + 1)
@@ -48,6 +52,20 @@ impl Select for TrackSegment {
         map.track.path[self.0].pos += delta;
         let next_index = next_index(self.0, map);
         map.track.path[next_index].pos += delta;
+    }
+
+    fn edit_ui<'a>(&self, map: &'a mut Map, ui: &mut egui::Ui) {
+        let mut segment = self.segment(map);
+
+        ui.strong("Start");
+        ui.end_row();
+        edit_point(ui, &mut segment.start);
+
+        ui.strong("End");
+        ui.end_row();
+        edit_point(ui, &mut segment.end);
+
+        self.set_segment(map, segment);
     }
 }
 
@@ -76,5 +94,9 @@ impl Select for TrackPoint {
 
     fn translate(&self, map: &mut Map, delta: Vec2) {
         map.track[self.0].pos += delta;
+    }
+
+    fn edit_ui<'a>(&self, map: &'a mut Map, ui: &mut egui::Ui) {
+        edit_point(ui, &mut map.track[self.0].pos);
     }
 }

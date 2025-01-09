@@ -1,6 +1,9 @@
 pub use glam::f32::*;
 pub use glam::u32::*;
 
+use tar::Archive;
+pub type MapFile<R> = Archive<R>;
+
 pub type Position = Vec3;
 
 #[derive(Debug, Clone, Copy)]

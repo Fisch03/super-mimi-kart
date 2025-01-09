@@ -1,4 +1,5 @@
 use common::{map::Map, types::*};
+use egui::Grid;
 
 mod collider;
 pub use collider::*;
@@ -29,6 +30,16 @@ pub enum ObjectType {
     Collider,
 }
 
+fn edit_point(ui: &mut egui::Ui, point: &mut Vec2) {
+    ui.label("X");
+    ui.add(egui::DragValue::new(&mut point.x));
+    ui.end_row();
+
+    ui.label("Y");
+    ui.add(egui::DragValue::new(&mut point.y));
+    ui.end_row();
+}
+
 pub trait Select {
     fn geometry_type(&self) -> GeometryType;
     fn object_type(&self) -> ObjectType;
@@ -41,11 +52,12 @@ pub trait Select {
     fn translate(&self, map: &mut Map, delta: Vec2);
 
     #[allow(unused_variables)]
-    fn edit_ui<'a>(&self, map: &'a mut Map, ui: &egui::Ui) {}
+    fn edit_ui<'a>(&self, map: &'a mut Map, ui: &mut egui::Ui) {}
 }
 
 pub trait SegmentSelect: Select {
     fn segment(&self, map: &Map) -> Segment;
+    fn set_segment(&self, map: &mut Map, segment: Segment);
     fn insert_point(&self, map: &mut Map, pos: Vec2);
 }
 
@@ -88,14 +100,16 @@ impl Selection {
         }
     }
 
-    pub fn edit_ui<'a>(&self, map: &'a mut Map, ui: &egui::Ui) {
-        match self {
-            Selection::None => {}
-            Selection::TrackPoint(i) => i.edit_ui(map, ui),
-            Selection::TrackSegment(i) => i.edit_ui(map, ui),
-            Selection::Collider(i) => i.edit_ui(map, ui),
-            Selection::ColliderPoint(i) => i.edit_ui(map, ui),
-            Selection::ColliderSegment(i) => i.edit_ui(map, ui),
-        }
+    pub fn edit_ui<'a>(&self, map: &'a mut Map, ui: &mut egui::Ui) {
+        Grid::new("edit_ui")
+            .num_columns(2)
+            .show(ui, |ui| match self {
+                Selection::None => {}
+                Selection::TrackPoint(i) => i.edit_ui(map, ui),
+                Selection::TrackSegment(i) => i.edit_ui(map, ui),
+                Selection::Collider(i) => i.edit_ui(map, ui),
+                Selection::ColliderPoint(i) => i.edit_ui(map, ui),
+                Selection::ColliderSegment(i) => i.edit_ui(map, ui),
+            });
     }
 }
