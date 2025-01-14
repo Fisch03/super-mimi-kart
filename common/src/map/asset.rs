@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::io::{Cursor, Read, Seek, Write};
+use std::io::{Cursor, Read, Write};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct AssetId(usize);

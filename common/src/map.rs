@@ -1,5 +1,4 @@
 use crate::types::*;
-use rmp_serde::Serializer;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -24,6 +23,7 @@ pub struct Map {
     assets: MapAssets,
 }
 
+#[derive(Debug)]
 pub enum MapLoadError {
     IoError(std::io::Error),
     DeserializeError(rmp_serde::decode::Error),
@@ -43,6 +43,7 @@ impl From<std::io::Error> for MapLoadError {
     }
 }
 
+#[derive(Debug)]
 pub enum MapSaveError {
     IoError(std::io::Error),
     EncodeError(rmp_serde::encode::Error),

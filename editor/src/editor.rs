@@ -43,7 +43,12 @@ impl eframe::App for Editor {
                             log::warn!("todo: open map file");
                         }
                         if ui.button("Save").clicked() {
-                            log::warn!("todo: save/download map file");
+                            use std::io::Cursor;
+
+                            let mut data = Vec::new();
+                            let mut cursor = Cursor::new(&mut data);
+                            self.map.save(&mut cursor).unwrap();
+                            save_file("map.smk", &data).unwrap();
                         }
                     });
                 });
@@ -79,4 +84,29 @@ impl eframe::App for Editor {
                 self.view.show(ui, &mut self.map);
             });
     }
+}
+
+fn save_file(filename: &str, data: &[u8]) -> Result<(), wasm_bindgen::JsValue> {
+    use wasm_bindgen::JsCast;
+    use web_sys::Blob;
+
+    let data = js_sys::Uint8Array::from(data);
+    let mut options = web_sys::BlobPropertyBag::new();
+    options.set_type("application/octet-stream");
+    let blob = Blob::new_with_u8_array_sequence_and_options(&data, &options)?;
+
+    let window = web_sys::window().unwrap();
+    let document = window.document().unwrap();
+    let body = document.body().unwrap();
+
+    let a = document.create_element("a")?;
+    a.set_attribute("href", &web_sys::Url::create_object_url_with_blob(&blob)?);
+    a.set_attribute("download", filename);
+
+    let a = a.dyn_into::<web_sys::HtmlElement>()?;
+    body.append_child(&a)?;
+    a.click();
+    body.remove_child(&a)?;
+
+    Ok(())
 }

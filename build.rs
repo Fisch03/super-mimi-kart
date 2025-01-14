@@ -35,7 +35,9 @@ fn build_wasm_pkg(in_dir: &str, pkg_out_dir: &str) {
         build_wasm.arg("--target").arg("web");
         build_wasm.env("CARGO_TARGET_DIR", &out_dir.join("target"));
         build_wasm.current_dir(in_dir);
-        let status = build_wasm.status().unwrap();
+        let status = build_wasm
+            .status()
+            .expect("Failed to run wasm-pack (is it installed?)");
 
         assert!(status.success(), "Failed to build web client");
     }
