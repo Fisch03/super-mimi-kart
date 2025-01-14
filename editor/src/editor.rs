@@ -91,9 +91,12 @@ fn save_file(filename: &str, data: &[u8]) -> Result<(), wasm_bindgen::JsValue> {
     use web_sys::Blob;
 
     let data = js_sys::Uint8Array::from(data);
+    let array = js_sys::Array::new();
+    array.push(&data.buffer());
+
     let mut options = web_sys::BlobPropertyBag::new();
-    options.set_type("application/octet-stream");
-    let blob = Blob::new_with_u8_array_sequence_and_options(&data, &options)?;
+    options.set_type("application/x-tar");
+    let blob = Blob::new_with_u8_array_sequence_and_options(&array, &options)?;
 
     let window = web_sys::window().unwrap();
     let document = window.document().unwrap();
