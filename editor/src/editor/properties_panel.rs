@@ -1,4 +1,5 @@
 use super::{map_view::Selection, Editor};
+use common::map::AssetId;
 use egui::{Grid, SliderClamping, TopBottomPanel};
 use egui_phosphor::bold;
 
@@ -44,6 +45,35 @@ impl Editor {
 
         ui.separator();
 
+        ui.horizontal(|ui| {
+            ui.strong("Assets");
+            if ui.button(format!("{}", bold::PLUS)).clicked() {
+                log::warn!("TODO: upload asset");
+            }
+        });
+        for i in (0..self.map.assets().len()) {
+            ui.push_id(i, |ui| {
+                ui.label(format!("Asset {}", i + 1));
+                ui.horizontal(|ui| {
+                    if ui
+                        .button(format!("{}", bold::IMAGE))
+                        .on_hover_text("Set as background")
+                        .clicked()
+                    {
+                        self.map.background = Some(AssetId::new(i));
+                    }
+                    if ui
+                        .button(format!("{}", bold::TRASH))
+                        .on_hover_text("Remove asset")
+                        .clicked()
+                    {
+                        log::warn!("TODO: remove all references to asset {}", i);
+                    }
+                });
+            });
+        }
+
+        /*
         for (i, collider) in self.map.colliders.iter().enumerate() {
             ui.horizontal(|ui| {
                 ui.label("Collider");
@@ -55,6 +85,7 @@ impl Editor {
             ui.strong("Collider");
             Grid::new("collider_grid").num_columns(2).show(ui, |ui| {});
         }
+        */
 
         TopBottomPanel::bottom("view_settings")
             .frame(

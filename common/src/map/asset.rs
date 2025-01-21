@@ -53,6 +53,10 @@ impl Asset {
             .unwrap();
         writer.write_all(&data).unwrap();
     }
+
+    pub fn default() -> Self {
+        Self(image::DynamicImage::new_rgba8(1, 1))
+    }
 }
 
 impl MapAssets {

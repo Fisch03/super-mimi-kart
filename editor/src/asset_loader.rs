@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 pub struct AssetLoader {
     assets: Mutex<MapAssets>,
     cache: Mutex<Vec<Option<Arc<ColorImage>>>>,
+    default_img: Mutex<Option<Arc<ColorImage>>>,
 }
 
 impl AssetLoader {
@@ -39,7 +40,16 @@ impl ImageLoader for AssetLoader {
 
         let asset_id = uri.split('/').last().unwrap();
         if asset_id == "default" {
-            todo!("Load default asset");
+            let mut default_img = self.default_img.lock().unwrap();
+            let default_img = default_img.get_or_insert_with(|| {
+                let data = (0..4 * 1000 * 1000).map(|_| 255).collect::<Vec<_>>();
+                let image = ColorImage::from_rgba_unmultiplied([1000, 1000], &data);
+                Arc::new(image)
+            });
+
+            return Ok(ImagePoll::Ready {
+                image: default_img.clone(),
+            });
         }
 
         let asset_id = asset_id.parse();
