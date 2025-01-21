@@ -20,12 +20,29 @@ pub struct Asset(image::DynamicImage);
 #[derive(Debug, Clone, Default)]
 pub struct MapAssets(Vec<Asset>);
 
+pub enum AssetLoadError {
+    IoError(std::io::Error),
+    ImageError(image::ImageError),
+}
+
+impl From<std::io::Error> for AssetLoadError {
+    fn from(e: std::io::Error) -> Self {
+        Self::IoError(e)
+    }
+}
+
+impl From<image::ImageError> for AssetLoadError {
+    fn from(e: image::ImageError) -> Self {
+        Self::ImageError(e)
+    }
+}
+
 impl Asset {
-    pub fn load<R: Read>(mut reader: R) -> Self {
+    pub fn load<R: Read>(mut reader: R) -> Result<Self, AssetLoadError> {
         let mut data = Vec::new();
-        reader.read_to_end(&mut data).unwrap();
-        let image = image::load_from_memory(&data).unwrap();
-        Self(image)
+        reader.read_to_end(&mut data)?;
+        let image = image::load_from_memory(&data)?;
+        Ok(Self(image))
     }
 
     pub fn save<W: Write>(&self, mut writer: W) {

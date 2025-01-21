@@ -62,29 +62,34 @@ impl From<std::io::Error> for MapSaveError {
 }
 
 impl Map {
-    pub fn load<R: Read + Seek>(map: R) -> Result<Self, MapLoadError> {
+    pub fn load<R: Read + Seek>(mut map: R) -> Result<Self, MapLoadError> {
+        map.seek(std::io::SeekFrom::Start(0))?;
         let mut map = Archive::new(map);
 
         let mut data = None;
+
+        let mut all_assets = HashMap::new();
         for entry in map.entries_with_seek()? {
             let entry = entry?;
 
             if &entry.path()? == Path::new("data") {
                 data = Some(rmp_serde::from_read(entry)?);
+            } else if let Some(name) = entry.path()?.file_name() {
+                let name = name.to_string_lossy().to_string();
+                if let Ok(asset) = Asset::load(entry) {
+                    all_assets.insert(name, asset);
+                }
             }
         }
 
         let mut data: Map = data.ok_or(MapLoadError::MissingData)?;
-        let mut assets = Vec::new();
+        let mut assets = Vec::with_capacity(data.asset_paths.len());
 
-        for entry in map.entries_with_seek()? {
-            let entry = entry?;
-            if let Some(name) = entry.path()?.file_name() {
-                let name = name.to_string_lossy().to_string();
-                if let Some(id) = data.asset_paths.get(&name) {
-                    let asset = Asset::load(entry);
-                    assets.push((*id, asset));
-                }
+        for (name, id) in data.asset_paths.iter() {
+            if let Some(asset) = all_assets.remove(name) {
+                assets.push((*id, asset));
+            } else {
+                return Err(MapLoadError::MissingAsset((*id, name.clone())));
             }
         }
 

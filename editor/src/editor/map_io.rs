@@ -6,10 +6,11 @@ use indexed_db_futures::{
     transaction::TransactionMode,
     KeyPath,
 };
+use js_sys::{Array, ArrayBuffer, Uint8Array};
 use serde::{Deserialize, Serialize};
-use std::io::Cursor;
-use wasm_bindgen::JsCast;
-use web_sys::Blob;
+use std::{io::Cursor, sync::mpsc};
+use wasm_bindgen::{closure::Closure, JsCast};
+use web_sys::{Blob, BlobPropertyBag, FileReader, HtmlElement, Url};
 
 const MAP_ID: u32 = 1;
 
@@ -83,30 +84,95 @@ impl MapDB {
     }
 }
 
+pub struct MapUpload {
+    input: web_sys::HtmlInputElement,
+    closure: Closure<dyn FnMut()>,
+    rx: mpsc::Receiver<Result<Map, MapLoadError>>,
+}
+
+impl MapUpload {
+    pub fn start() -> Result<Self, wasm_bindgen::JsValue> {
+        let window = web_sys::window().unwrap();
+        let document = window.document().unwrap();
+        let body = document.body().unwrap();
+
+        let input = document
+            .create_element("input")?
+            .dyn_into::<web_sys::HtmlInputElement>()?;
+        input.set_attribute("type", "file")?;
+        input.set_attribute("accept", ".smk")?;
+        input.set_attribute("style", "display: none")?;
+
+        body.append_child(&input)?;
+
+        let (tx, rx) = mpsc::channel();
+        let closure = {
+            let input = input.clone();
+            Closure::once(move || {
+                let file = input.files().and_then(|files| files.get(0));
+                if let Some(file) = file {
+                    let reader = FileReader::new().unwrap();
+                    let reader_clone = reader.clone();
+                    let on_load = Closure::once(Box::new(move || {
+                        let array_buffer = reader_clone
+                            .result()
+                            .unwrap()
+                            .dyn_into::<ArrayBuffer>()
+                            .unwrap();
+                        let buffer = Uint8Array::new(&array_buffer).to_vec();
+                        tx.send(Map::load(&mut Cursor::new(&buffer))).ok();
+                    }));
+                    reader.set_onload(Some(on_load.as_ref().unchecked_ref()));
+                    reader.read_as_array_buffer(&file).unwrap();
+                    on_load.forget();
+                }
+            })
+        };
+
+        input.set_onchange(Some(closure.as_ref().unchecked_ref()));
+        input.click();
+        Ok(Self { input, closure, rx })
+    }
+
+    pub fn poll(&self) -> Option<Result<Map, MapLoadError>> {
+        self.rx.try_recv().ok()
+    }
+}
+
+impl Drop for MapUpload {
+    fn drop(&mut self) {
+        let window = web_sys::window().unwrap();
+        let document = window.document().unwrap();
+        let body = document.body().unwrap();
+
+        body.remove_child(&self.input).unwrap();
+    }
+}
+
 pub fn download_map(map: &Map) -> Result<(), wasm_bindgen::JsValue> {
+    let window = web_sys::window().unwrap();
+    let document = window.document().unwrap();
+    let body = document.body().unwrap();
+
     let file_name = format!("{}.smk", map.metadata.name);
 
     let mut data = Vec::new();
     let mut cursor = Cursor::new(&mut data);
     map.save(&mut cursor).unwrap();
 
-    let data = js_sys::Uint8Array::from(data.as_slice());
-    let array = js_sys::Array::new();
+    let data = Uint8Array::from(data.as_slice());
+    let array = Array::new();
     array.push(&data.buffer());
 
-    let options = web_sys::BlobPropertyBag::new();
+    let options = BlobPropertyBag::new();
     options.set_type("application/x-tar");
     let blob = Blob::new_with_u8_array_sequence_and_options(&array, &options)?;
 
-    let window = web_sys::window().unwrap();
-    let document = window.document().unwrap();
-    let body = document.body().unwrap();
-
     let a = document.create_element("a")?;
-    a.set_attribute("href", &web_sys::Url::create_object_url_with_blob(&blob)?);
+    a.set_attribute("href", &Url::create_object_url_with_blob(&blob)?);
     a.set_attribute("download", &file_name);
 
-    let a = a.dyn_into::<web_sys::HtmlElement>()?;
+    let a = a.dyn_into::<HtmlElement>()?;
     body.append_child(&a)?;
     a.click();
     body.remove_child(&a)?;
