@@ -1,6 +1,8 @@
+use crate::AssetLoader;
 use common::map::Map;
 use egui::{CentralPanel, SidePanel, TopBottomPanel};
 use poll_promise::Promise;
+use std::sync::Arc;
 
 mod map_io;
 mod map_view;
@@ -12,6 +14,7 @@ pub struct Editor {
     view: map_view::View,
     map_db: map_io::MapDB,
     last_save: f64,
+    asset_loader: Arc<AssetLoader>,
 }
 
 impl Editor {
@@ -19,7 +22,7 @@ impl Editor {
         let map_db = map_io::MapDB::open().await.unwrap();
         let map = map_db.load().await;
 
-        let map = match map {
+        let mut map = match map {
             Ok(Some(map)) => map,
             Ok(None) => Map::default(),
             Err(e) => {
@@ -27,6 +30,9 @@ impl Editor {
                 Map::default()
             }
         };
+        map.round_all();
+
+        let asset_loader = Arc::new(AssetLoader::new(&map));
 
         Self {
             map,
@@ -34,16 +40,25 @@ impl Editor {
             map_db,
             view: map_view::View::default(),
             last_save: now(),
+            asset_loader,
         }
     }
 
     #[allow(dead_code)]
-    pub fn init_egui(cc: &eframe::CreationContext) {
+    pub fn init_egui(&self, cc: &eframe::CreationContext) {
         let mut fonts = egui::FontDefinitions::default();
         egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Bold);
         cc.egui_ctx.set_fonts(fonts);
 
         egui_extras::install_image_loaders(&cc.egui_ctx);
+        cc.egui_ctx.add_image_loader(self.asset_loader.clone());
+    }
+
+    fn replace_map(&mut self, mut map: Map) {
+        map.round_all();
+        self.asset_loader.load_map(&map);
+        self.map = map;
+        self.view = map_view::View::default();
     }
 }
 
@@ -52,7 +67,7 @@ impl eframe::App for Editor {
         if let Some(map_upload) = &mut self.map_upload {
             match map_upload.poll() {
                 Some(Ok(map)) => {
-                    self.map = map;
+                    self.replace_map(map);
                     self.map_upload = None;
                 }
                 Some(Err(e)) => {
@@ -74,8 +89,7 @@ impl eframe::App for Editor {
                     ui.menu_button("File", |ui| {
                         if ui.button("New").clicked() {
                             // TODO: ask for confirmation if there are unsaved changes
-                            self.map = Map::default();
-                            self.view = map_view::View::default();
+                            self.replace_map(Map::default());
                         }
                         if ui.button("Open").clicked() {
                             let upload = map_io::MapUpload::start();
@@ -85,6 +99,7 @@ impl eframe::App for Editor {
                             }
                         }
                         if ui.button("Save").clicked() {
+                            self.map.round_all();
                             map_io::download_map(&self.map);
                         }
                     });

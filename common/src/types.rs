@@ -1,5 +1,6 @@
 pub use glam::f32::*;
 pub use glam::u32::*;
+pub use image::GenericImageView;
 
 use tar::Archive;
 pub type MapFile<R> = Archive<R>;

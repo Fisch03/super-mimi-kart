@@ -14,7 +14,8 @@ pub struct Track {
 pub struct TrackPoint {
     pub pos: Vec2,
     pub checkpoint_rotation: f32,
-    pub checkpoint_width: f32,
+    pub checkpoint_width_left: f32,
+    pub checkpoint_width_right: f32,
 }
 
 pub struct TrackStartIter<'a> {
@@ -47,6 +48,12 @@ impl Track {
         let next_index = (index + 1) % self.path.len();
         self.path[index].pos = segment.start;
         self.path[next_index].pos = segment.end;
+    }
+
+    pub fn round_all(&mut self) {
+        for point in &mut self.path {
+            *point = point.to_rounded();
+        }
     }
 }
 
@@ -85,7 +92,27 @@ impl TrackPoint {
         Self {
             pos,
             checkpoint_rotation: 0.0,
-            checkpoint_width: 0.0,
+            checkpoint_width_left: 10.0,
+            checkpoint_width_right: 10.0,
+        }
+    }
+
+    pub fn checkpoint_positions(&self) -> (Vec2, Vec2) {
+        let dir = Vec2::new(
+            self.checkpoint_rotation.to_radians().cos(),
+            self.checkpoint_rotation.to_radians().sin(),
+        );
+        let left = self.pos - dir * self.checkpoint_width_left;
+        let right = self.pos + dir * self.checkpoint_width_right;
+        (left, right)
+    }
+
+    pub fn to_rounded(&self) -> Self {
+        Self {
+            pos: self.pos.round(),
+            checkpoint_rotation: self.checkpoint_rotation,
+            checkpoint_width_left: self.checkpoint_width_left,
+            checkpoint_width_right: self.checkpoint_width_right,
         }
     }
 }

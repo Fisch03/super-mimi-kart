@@ -97,6 +97,26 @@ impl Select for TrackPoint {
     }
 
     fn edit_ui<'a>(&self, map: &'a mut Map, ui: &mut egui::Ui) {
-        edit_point(ui, &mut map.track[self.0].pos);
+        let point = &mut map.track[self.0];
+
+        ui.strong("Position");
+        ui.end_row();
+        edit_point(ui, &mut point.pos);
+
+        ui.strong("Checkpoint");
+        ui.end_row();
+
+        ui.label("Rotation");
+        ui.add(egui::DragValue::new(&mut point.checkpoint_rotation));
+        point.checkpoint_rotation = point.checkpoint_rotation.rem_euclid(360.0);
+        ui.end_row();
+
+        ui.label("Width Left");
+        ui.add(egui::DragValue::new(&mut point.checkpoint_width_left).range(0.0..=f32::INFINITY));
+        ui.end_row();
+
+        ui.label("Width Right");
+        ui.add(egui::DragValue::new(&mut point.checkpoint_width_right).range(0.0..=f32::INFINITY));
+        ui.end_row();
     }
 }

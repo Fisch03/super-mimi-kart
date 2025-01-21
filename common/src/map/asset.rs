@@ -15,7 +15,7 @@ impl AssetId {
 }
 
 #[derive(Debug, Clone)]
-pub struct Asset(image::DynamicImage);
+pub struct Asset(pub image::DynamicImage);
 
 #[derive(Debug, Clone, Default)]
 pub struct MapAssets(Vec<Asset>);
@@ -61,6 +61,10 @@ impl MapAssets {
 
         let assets = assets.into_iter().map(|(_, asset)| asset).collect();
         Self(assets)
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
     }
 
     pub fn insert(&mut self, asset: Asset) -> AssetId {

@@ -5,6 +5,7 @@ use std::{
 
 fn main() {
     println!("cargo:rerun-if-changed=assets/");
+    print!("cargo:rerun-if-changed=common/");
     std::fs::remove_dir_all("./static").unwrap_or(());
     std::fs::create_dir_all("./static/assets").unwrap();
     copy_dir(Path::new("assets"), Path::new("./static/assets"));

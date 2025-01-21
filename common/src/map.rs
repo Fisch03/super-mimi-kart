@@ -16,6 +16,7 @@ pub use asset::*;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Map {
     pub metadata: Metadata,
+    pub background: Option<AssetId>,
     pub track: Track,
     pub colliders: Vec<Collider>,
     pub asset_paths: HashMap<String, AssetId>,
@@ -26,13 +27,13 @@ pub struct Map {
 #[derive(Debug)]
 pub enum MapLoadError {
     IoError(std::io::Error),
-    DeserializeError(rmp_serde::decode::Error),
+    DeserializeError(serde_json::Error),
     MissingData,
     MissingAsset((AssetId, String)),
 }
 
-impl From<rmp_serde::decode::Error> for MapLoadError {
-    fn from(e: rmp_serde::decode::Error) -> Self {
+impl From<serde_json::Error> for MapLoadError {
+    fn from(e: serde_json::Error) -> Self {
         Self::DeserializeError(e)
     }
 }
@@ -46,11 +47,11 @@ impl From<std::io::Error> for MapLoadError {
 #[derive(Debug)]
 pub enum MapSaveError {
     IoError(std::io::Error),
-    EncodeError(rmp_serde::encode::Error),
+    EncodeError(serde_json::Error),
 }
 
-impl From<rmp_serde::encode::Error> for MapSaveError {
-    fn from(e: rmp_serde::encode::Error) -> Self {
+impl From<serde_json::Error> for MapSaveError {
+    fn from(e: serde_json::Error) -> Self {
         Self::EncodeError(e)
     }
 }
@@ -62,6 +63,15 @@ impl From<std::io::Error> for MapSaveError {
 }
 
 impl Map {
+    pub fn assets(&self) -> &MapAssets {
+        &self.assets
+    }
+
+    pub fn round_all(&mut self) {
+        self.track.round_all();
+        self.colliders.iter_mut().for_each(|c| c.round_all());
+    }
+
     pub fn load<R: Read + Seek>(mut map: R) -> Result<Self, MapLoadError> {
         map.seek(std::io::SeekFrom::Start(0))?;
         let mut map = Archive::new(map);
@@ -73,7 +83,7 @@ impl Map {
             let entry = entry?;
 
             if &entry.path()? == Path::new("data") {
-                data = Some(rmp_serde::from_read(entry)?);
+                data = Some(serde_json::from_reader(entry)?);
             } else if let Some(name) = entry.path()?.file_name() {
                 let name = name.to_string_lossy().to_string();
                 if let Ok(asset) = Asset::load(entry) {
@@ -104,7 +114,7 @@ impl Map {
 
         {
             let mut data = map.append_writer(&mut header, "data")?;
-            rmp_serde::encode::write(&mut data, self)?;
+            serde_json::to_writer(&mut data, self)?;
         }
 
         for (id, asset) in self.assets.iter_ids() {
@@ -155,6 +165,10 @@ impl Collider {
         let next_index = (i + 1) % self.shape.len();
         self.shape[i] = segment.start;
         self.shape[next_index] = segment.end;
+    }
+
+    pub fn round_all(&mut self) {
+        self.shape.iter_mut().for_each(|p| *p = p.round());
     }
 }
 

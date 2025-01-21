@@ -15,7 +15,6 @@ mod view_settings;
 pub struct View {
     zoom: f32,
     pan: egui::Pos2,
-    map_image: String,
     selection: Selection,
     dragging_selection: bool,
 
@@ -24,16 +23,9 @@ pub struct View {
 
 impl Default for View {
     fn default() -> Self {
-        let location = web_sys::window().unwrap().location();
-        let map_image = format!(
-            "http://{}/assets/maps/mcircuit1/map.png",
-            location.host().unwrap()
-        );
-
         Self {
             zoom: 1.0,
             pan: egui::Pos2::ZERO,
-            map_image,
             selection: Selection::None,
             dragging_selection: false,
             start_viz_amt: 10,
@@ -56,8 +48,13 @@ impl View {
 
         // let tex_res = Image::new("https://files.cibo-online.net/xBVyOuvwP3u0.png")
         //     .load_for_size(ui.ctx(), rect.size());
+        let texture_uri = map
+            .background
+            .map(|b| format!("smk://asset/{}", b.as_usize()))
+            .unwrap_or_else(|| String::from("smk://asset/default"));
+
         let tex_res = ui.ctx().try_load_texture(
-            &self.map_image,
+            &texture_uri,
             TextureOptions {
                 magnification: TextureFilter::Nearest,
                 minification: TextureFilter::Nearest,
@@ -76,7 +73,7 @@ impl View {
                     egui::FontId::proportional(32.0),
                     egui::Color32::RED,
                 );
-                log::error!("Failed to load map image '{}': {}", self.map_image, err);
+                log::error!("Failed to load map image '{}': {}", texture_uri, err);
                 return;
             }
         };
@@ -183,7 +180,7 @@ impl View {
                         tri.iter()
                             .map(|&i| {
                                 let p = collider.shape[i];
-                                pos2(p.x, p.y) * self.zoom + image_center_screen
+                                pos2(p.x, p.y).round() * self.zoom + image_center_screen
                             })
                             .collect(),
                         Color32::from_rgba_premultiplied(255, 0, 0, 50),
@@ -197,7 +194,7 @@ impl View {
                         .iter()
                         .enumerate()
                         .map(|(p_i, p)| {
-                            let p = pos2(p.x, p.y) * self.zoom + image_center_screen;
+                            let p = pos2(p.x, p.y).round() * self.zoom + image_center_screen;
 
                             let color = if self.selection == Selection::collider_point(c_i, p_i) {
                                 Color32::RED
@@ -224,10 +221,10 @@ impl View {
                 match self.selection {
                     Selection::ColliderSegment(s) if s.collider.0 == c_i => {
                         let segment = s.segment(map);
-                        let p_1 = pos2(segment.start.x, segment.start.y) * self.zoom
+                        let p_1 = pos2(segment.start.x, segment.start.y).round() * self.zoom
                             + image_center_screen;
-                        let p_2 =
-                            pos2(segment.end.x, segment.end.y) * self.zoom + image_center_screen;
+                        let p_2 = pos2(segment.end.x, segment.end.y).round() * self.zoom
+                            + image_center_screen;
 
                         ui.painter().add(Shape::LineSegment {
                             points: [p_1, p_2],
@@ -248,8 +245,14 @@ impl View {
             )))
             .enumerate()
             .for_each(|(i, (start, end))| {
-                let start = pos2(start.pos.x, start.pos.y) * self.zoom + image_center_screen;
-                let end = pos2(end.pos.x, end.pos.y) * self.zoom + image_center_screen;
+                let end = end.to_rounded();
+                let (cp_left, cp_right) = end.checkpoint_positions();
+                let cp_left = pos2(cp_left.x, cp_left.y) * self.zoom + image_center_screen;
+                let cp_right = pos2(cp_right.x, cp_right.y) * self.zoom + image_center_screen;
+
+                let start =
+                    pos2(start.pos.x, start.pos.y).round() * self.zoom + image_center_screen;
+                let end = pos2(end.pos.x, end.pos.y).round() * self.zoom + image_center_screen;
 
                 let line_color = if self.selection == Selection::track_segment(i) {
                     Color32::RED
@@ -270,6 +273,11 @@ impl View {
                     points: [start, end],
                     stroke: (3.0, line_color).into(),
                 });
+                ui.painter().add(Shape::LineSegment {
+                    points: [cp_left, cp_right],
+                    stroke: (3.0, Color32::ORANGE).into(),
+                });
+
                 circles.push(Shape::Circle(CircleShape {
                     center: start,
                     radius: 5.0,

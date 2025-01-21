@@ -32,11 +32,11 @@ pub enum ObjectType {
 
 fn edit_point(ui: &mut egui::Ui, point: &mut Vec2) {
     ui.label("X");
-    ui.add(egui::DragValue::new(&mut point.x));
+    ui.add(egui::DragValue::new(&mut point.x).fixed_decimals(0));
     ui.end_row();
 
     ui.label("Y");
-    ui.add(egui::DragValue::new(&mut point.y));
+    ui.add(egui::DragValue::new(&mut point.y).fixed_decimals(0));
     ui.end_row();
 }
 
