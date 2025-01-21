@@ -1,5 +1,6 @@
 use common::map::Map;
 use common::types::*;
+use earcut::Earcut;
 use egui::{
     epaint::{CircleShape, PathShape},
     pos2, vec2, Color32, Grid, Rect, Sense, Shape, Spinner, TextureFilter, TextureOptions, Window,
@@ -149,7 +150,7 @@ impl View {
 
                 s.insert_point(map, closest);
             }
-        } else if res.clicked() {
+        } else if res.clicked_by(egui::PointerButton::Primary) {
             let click_pos = res.interact_pointer_pos().unwrap_or_default();
             let click_pos = (click_pos - image_center_screen) / self.zoom;
 
@@ -169,11 +170,28 @@ impl View {
         }
 
         let mut circles = Vec::with_capacity(map.track.path.len() + map.colliders.len() * 4);
+        let mut earcut = Earcut::new();
         map.colliders
             .iter()
             .enumerate()
             .for_each(|(c_i, collider)| {
-                let polygon = Shape::Path(PathShape::convex_polygon(
+                let mut tris: Vec<usize> = Vec::new();
+                //TODO: only do this when colliders are changed
+                earcut.earcut(collider.shape.iter().map(|p| [p.x, p.y]), &[], &mut tris);
+                for tri in tris.chunks(3) {
+                    ui.painter().add(Shape::convex_polygon(
+                        tri.iter()
+                            .map(|&i| {
+                                let p = collider.shape[i];
+                                pos2(p.x, p.y) * self.zoom + image_center_screen
+                            })
+                            .collect(),
+                        Color32::from_rgba_premultiplied(255, 0, 0, 50),
+                        egui::Stroke::NONE,
+                    ));
+                }
+
+                let outline = Shape::Path(PathShape::convex_polygon(
                     collider
                         .shape
                         .iter()
@@ -197,11 +215,11 @@ impl View {
                             p
                         })
                         .collect(),
-                    Color32::from_rgba_premultiplied(255, 0, 0, 50),
+                    Color32::from_rgba_premultiplied(0, 0, 0, 0),
                     (1.0, Color32::BLACK),
                 ));
 
-                ui.painter().add(polygon);
+                ui.painter().add(outline);
 
                 match self.selection {
                     Selection::ColliderSegment(s) if s.collider.0 == c_i => {

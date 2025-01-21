@@ -32,11 +32,16 @@ impl WebHandle {
         &self,
         canvas: web_sys::HtmlCanvasElement,
     ) -> Result<(), wasm_bindgen::JsValue> {
+        let editor = Editor::new().await;
+
         self.runner
             .start(
                 canvas,
                 eframe::WebOptions::default(),
-                Box::new(|cc| Ok(Box::new(Editor::new(cc)))),
+                Box::new(move |cc| {
+                    Editor::init_egui(cc);
+                    Ok(Box::new(editor))
+                }),
             )
             .await
     }

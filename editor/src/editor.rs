@@ -1,27 +1,47 @@
 use common::map::Map;
 use egui::{CentralPanel, SidePanel, TopBottomPanel};
+use poll_promise::Promise;
 
+mod map_io;
 mod map_view;
 mod properties_panel;
 
 pub struct Editor {
     map: Map,
     view: map_view::View,
+    map_db: map_io::MapDB,
+    last_save: f64,
 }
 
 impl Editor {
+    pub async fn new() -> Self {
+        let map_db = map_io::MapDB::open().await.unwrap();
+        let map = map_db.load().await;
+
+        let map = match map {
+            Ok(Some(map)) => map,
+            Ok(None) => Map::default(),
+            Err(e) => {
+                log::error!("failed to load map: {:?}", e);
+                Map::default()
+            }
+        };
+
+        Self {
+            map,
+            map_db,
+            view: map_view::View::default(),
+            last_save: now(),
+        }
+    }
+
     #[allow(dead_code)]
-    pub fn new(cc: &eframe::CreationContext) -> Self {
+    pub fn init_egui(cc: &eframe::CreationContext) {
         let mut fonts = egui::FontDefinitions::default();
         egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Bold);
         cc.egui_ctx.set_fonts(fonts);
 
         egui_extras::install_image_loaders(&cc.egui_ctx);
-
-        Self {
-            map: Map::default(),
-            view: map_view::View::default(),
-        }
     }
 }
 
@@ -43,12 +63,7 @@ impl eframe::App for Editor {
                             log::warn!("todo: open map file");
                         }
                         if ui.button("Save").clicked() {
-                            use std::io::Cursor;
-
-                            let mut data = Vec::new();
-                            let mut cursor = Cursor::new(&mut data);
-                            self.map.save(&mut cursor).unwrap();
-                            save_file("map.smk", &data).unwrap();
+                            map_io::download_map(&self.map);
                         }
                     });
                 });
@@ -83,33 +98,23 @@ impl eframe::App for Editor {
             .show(ctx, |ui| {
                 self.view.show(ui, &mut self.map);
             });
+
+        if self.last_save + 10.0 < now() {
+            self.last_save = now();
+            let db = self.map_db.clone();
+            let map = self.map.clone();
+            Promise::spawn_local(async move {
+                log::debug!("saving map");
+                match db.save(map).await {
+                    Ok(_) => log::debug!("map saved"),
+                    Err(e) => log::error!("failed to save map: {:?}", e),
+                }
+            });
+        }
     }
 }
 
-fn save_file(filename: &str, data: &[u8]) -> Result<(), wasm_bindgen::JsValue> {
-    use wasm_bindgen::JsCast;
-    use web_sys::Blob;
-
-    let data = js_sys::Uint8Array::from(data);
-    let array = js_sys::Array::new();
-    array.push(&data.buffer());
-
-    let mut options = web_sys::BlobPropertyBag::new();
-    options.set_type("application/x-tar");
-    let blob = Blob::new_with_u8_array_sequence_and_options(&array, &options)?;
-
-    let window = web_sys::window().unwrap();
-    let document = window.document().unwrap();
-    let body = document.body().unwrap();
-
-    let a = document.create_element("a")?;
-    a.set_attribute("href", &web_sys::Url::create_object_url_with_blob(&blob)?);
-    a.set_attribute("download", filename);
-
-    let a = a.dyn_into::<web_sys::HtmlElement>()?;
-    body.append_child(&a)?;
-    a.click();
-    body.remove_child(&a)?;
-
-    Ok(())
+pub fn now() -> f64 {
+    let performance = web_sys::window().unwrap().performance().unwrap();
+    performance.now()
 }
