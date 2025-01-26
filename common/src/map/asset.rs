@@ -1,3 +1,4 @@
+use image::GenericImageView;
 use serde::{Deserialize, Serialize};
 use std::io::{Cursor, Read, Write};
 
@@ -15,11 +16,15 @@ impl AssetId {
 }
 
 #[derive(Debug, Clone)]
-pub struct Asset(pub image::DynamicImage);
+pub struct Asset {
+    pub name: String,
+    pub image: image::DynamicImage,
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct MapAssets(Vec<Asset>);
 
+#[derive(Debug)]
 pub enum AssetLoadError {
     IoError(std::io::Error),
     ImageError(image::ImageError),
@@ -38,24 +43,27 @@ impl From<image::ImageError> for AssetLoadError {
 }
 
 impl Asset {
-    pub fn load<R: Read>(mut reader: R) -> Result<Self, AssetLoadError> {
+    pub fn dimensions(&self) -> (u32, u32) {
+        self.image.dimensions()
+    }
+
+    pub fn load<R: Read>(name: &str, mut reader: R) -> Result<Self, AssetLoadError> {
         let mut data = Vec::new();
         reader.read_to_end(&mut data)?;
         let image = image::load_from_memory(&data)?;
-        Ok(Self(image))
+        Ok(Self {
+            name: name.to_string(),
+            image,
+        })
     }
 
     pub fn save<W: Write>(&self, mut writer: W) {
         let mut data = Vec::new();
         let mut cursor = Cursor::new(&mut data);
-        self.0
+        self.image
             .write_to(&mut cursor, image::ImageFormat::Png)
             .unwrap();
         writer.write_all(&data).unwrap();
-    }
-
-    pub fn default() -> Self {
-        Self(image::DynamicImage::new_rgba8(1, 1))
     }
 }
 
@@ -94,5 +102,12 @@ impl MapAssets {
             .iter()
             .enumerate()
             .map(|(i, asset)| (AssetId(i), asset))
+    }
+}
+
+impl std::ops::Index<AssetId> for MapAssets {
+    type Output = Asset;
+    fn index(&self, id: AssetId) -> &Self::Output {
+        &self.0[id.0]
     }
 }

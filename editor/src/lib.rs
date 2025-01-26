@@ -3,8 +3,8 @@ use wasm_bindgen::prelude::*;
 mod editor;
 use editor::Editor;
 
-mod asset_loader;
-use asset_loader::AssetLoader;
+mod assets;
+use assets::{AssetLoader, AssetUpload};
 
 /// Your handle to the web app from JavaScript.
 #[cfg(target_arch = "wasm32")]

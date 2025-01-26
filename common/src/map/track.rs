@@ -143,7 +143,9 @@ impl<'a> Iterator for TrackStartIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         self.offset += self.step_size;
         loop {
-            let segment = self.current_segment();
+            let mut segment = self.current_segment();
+            segment.round();
+
             let segment_length = segment.length();
             if self.offset > segment_length {
                 self.offset -= segment_length;

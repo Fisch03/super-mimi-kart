@@ -72,6 +72,27 @@ impl Map {
         self.colliders.iter_mut().for_each(|c| c.round_all());
     }
 
+    pub fn asset_name_mut(&mut self, id: AssetId, f: impl FnOnce(&mut String)) {
+        let asset = match self.assets.get_mut(id) {
+            Some(asset) => asset,
+            None => return,
+        };
+
+        let current_name = asset.name.clone();
+        f(&mut asset.name);
+        if current_name != asset.name {
+            self.asset_paths.remove(&current_name);
+            self.asset_paths.insert(asset.name.clone(), id);
+        }
+    }
+
+    pub fn add_asset(&mut self, asset: Asset) -> AssetId {
+        let name = asset.name.clone();
+        let id = self.assets.insert(asset);
+        self.asset_paths.insert(name, id);
+        id
+    }
+
     pub fn load<R: Read + Seek>(mut map: R) -> Result<Self, MapLoadError> {
         map.seek(std::io::SeekFrom::Start(0))?;
         let mut map = Archive::new(map);
@@ -86,7 +107,7 @@ impl Map {
                 data = Some(serde_json::from_reader(entry)?);
             } else if let Some(name) = entry.path()?.file_name() {
                 let name = name.to_string_lossy().to_string();
-                if let Ok(asset) = Asset::load(entry) {
+                if let Ok(asset) = Asset::load(&name, entry) {
                     all_assets.insert(name, asset);
                 }
             }
@@ -117,9 +138,9 @@ impl Map {
             serde_json::to_writer(&mut data, self)?;
         }
 
-        for (id, asset) in self.assets.iter_ids() {
+        for asset in self.assets.iter() {
             let mut header = tar::Header::new_gnu();
-            let mut data = map.append_writer(&mut header, &format!("asset/{}", id.as_usize()))?;
+            let mut data = map.append_writer(&mut header, &asset.name)?;
             asset.save(&mut data);
         }
 

@@ -4,7 +4,9 @@ use crate::engine::{
     sprite::{SpriteSheet, SPRITE_QUAD},
     RenderContext,
 };
+use common::types::*;
 use glow::*;
+use image::DynamicImage;
 
 const SCALE: f32 = 100.0;
 
@@ -12,12 +14,16 @@ const SCALE: f32 = 100.0;
 pub struct Map {
     transform: Transform,
     mesh: Mesh,
+    dimensions: Vec2,
 }
 
 impl Map {
-    pub fn new(gl: &Context) -> Self {
-        let sheet = SpriteSheet::load_single(gl, "maps/mcircuit1/map.png");
-        let aspect = sheet.sprite_dimensions().x as f32 / sheet.sprite_dimensions().y as f32;
+    pub fn new(gl: &Context, texture: &DynamicImage) -> Self {
+        let sheet = SpriteSheet::from_images(gl, &[texture]);
+
+        let dimensions = sheet.sprite_dimensions();
+        let dimensions = Vec2::new(dimensions.x as f32, dimensions.y as f32);
+        let aspect = dimensions.x / dimensions.y;
 
         let transform = Transform::new()
             .scale(SCALE, 1.0, SCALE / aspect)
@@ -26,7 +32,12 @@ impl Map {
         Self {
             transform,
             mesh: Mesh::new(gl, SPRITE_QUAD, sheet),
+            dimensions,
         }
+    }
+
+    pub fn map_coord_to_world(&self, pos: Vec2) -> Vec2 {
+        (pos / self.dimensions) * SCALE * 2.0
     }
 }
 

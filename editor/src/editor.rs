@@ -1,4 +1,4 @@
-use crate::AssetLoader;
+use crate::{AssetLoader, AssetUpload};
 use common::map::Map;
 use egui::{CentralPanel, SidePanel, TopBottomPanel};
 use poll_promise::Promise;
@@ -14,7 +14,9 @@ pub struct Editor {
     view: map_view::View,
     map_db: map_io::MapDB,
     last_save: f64,
+
     asset_loader: Arc<AssetLoader>,
+    asset_uploads: Vec<AssetUpload>,
 }
 
 impl Editor {
@@ -40,7 +42,9 @@ impl Editor {
             map_db,
             view: map_view::View::default(),
             last_save: now(),
+
             asset_loader,
+            asset_uploads: Vec::new(),
         }
     }
 
@@ -60,6 +64,18 @@ impl Editor {
         self.map = map;
         self.view = map_view::View::default();
     }
+
+    fn upload_asset(&mut self, name: String) {
+        let upload = AssetUpload::start(name);
+        let upload = match upload {
+            Ok(upload) => upload,
+            Err(e) => {
+                log::error!("failed to start asset upload: {:?}", e);
+                return;
+            }
+        };
+        self.asset_uploads.push(upload);
+    }
 }
 
 impl eframe::App for Editor {
@@ -73,6 +89,21 @@ impl eframe::App for Editor {
                 Some(Err(e)) => {
                     log::error!("failed to load map: {:?}", e);
                     self.map_upload = None;
+                }
+                None => {
+                    ctx.request_repaint();
+                }
+            }
+        }
+
+        for upload in &mut self.asset_uploads {
+            match upload.poll() {
+                Some(Ok(asset)) => {
+                    self.map.add_asset(asset);
+                    self.asset_loader.load_map(&self.map);
+                }
+                Some(Err(e)) => {
+                    log::error!("failed to upload asset: {:?}", e);
                 }
                 None => {
                     ctx.request_repaint();

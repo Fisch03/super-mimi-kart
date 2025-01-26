@@ -1,3 +1,5 @@
+use common::ClientMessage;
+
 mod shaders;
 pub use shaders::Shaders;
 
@@ -23,5 +25,13 @@ impl core::ops::Deref for RenderContext<'_> {
 
 pub struct UpdateContext<'a> {
     pub cam: &'a mut Camera,
+    pub send_msg: &'a mut dyn FnMut(ClientMessage),
     pub dt: f32,
+    pub tick: bool,
+}
+
+impl<'a> UpdateContext<'a> {
+    pub fn send_msg(&mut self, msg: ClientMessage) {
+        (self.send_msg)(msg);
+    }
 }

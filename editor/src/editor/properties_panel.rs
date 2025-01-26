@@ -1,6 +1,6 @@
 use super::{map_view::Selection, Editor};
 use common::map::AssetId;
-use egui::{Grid, SliderClamping, TopBottomPanel};
+use egui::{vec2, Grid, Image, SliderClamping, TopBottomPanel};
 use egui_phosphor::bold;
 
 impl Editor {
@@ -48,27 +48,41 @@ impl Editor {
         ui.horizontal(|ui| {
             ui.strong("Assets");
             if ui.button(format!("{}", bold::PLUS)).clicked() {
-                log::warn!("TODO: upload asset");
+                self.upload_asset(format!("Asset {}", self.map.assets().len() + 1));
             }
         });
-        for i in (0..self.map.assets().len()) {
+        for i in 0..self.map.assets().len() {
             ui.push_id(i, |ui| {
-                ui.label(format!("Asset {}", i + 1));
+                let id = AssetId::new(i);
                 ui.horizontal(|ui| {
-                    if ui
-                        .button(format!("{}", bold::IMAGE))
-                        .on_hover_text("Set as background")
-                        .clicked()
-                    {
-                        self.map.background = Some(AssetId::new(i));
-                    }
-                    if ui
-                        .button(format!("{}", bold::TRASH))
-                        .on_hover_text("Remove asset")
-                        .clicked()
-                    {
-                        log::warn!("TODO: remove all references to asset {}", i);
-                    }
+                    ui.add(
+                        Image::new(format!("smk://asset/{}", id.as_usize()))
+                            .max_size(vec2(75.0, 75.0))
+                            .fit_to_original_size(100.0),
+                    );
+
+                    ui.vertical(|ui| {
+                        self.map.asset_name_mut(id, |name| {
+                            ui.text_edit_singleline(name);
+                        });
+
+                        ui.horizontal(|ui| {
+                            if ui
+                                .button(format!("{}", bold::IMAGE))
+                                .on_hover_text("Set as background")
+                                .clicked()
+                            {
+                                self.map.background = Some(AssetId::new(i));
+                            }
+                            if ui
+                                .button(format!("{}", bold::TRASH))
+                                .on_hover_text("Remove asset")
+                                .clicked()
+                            {
+                                log::warn!("TODO: remove all references to asset {}", i);
+                            }
+                        });
+                    });
                 });
             });
         }

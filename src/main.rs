@@ -1,46 +1,41 @@
 use axum::{
     extract::{
-        connect_info::ConnectInfo,
         ws::{Message, WebSocket, WebSocketUpgrade},
         State,
     },
-    http::{HeaderMap, Response, StatusCode},
     response::IntoResponse,
     routing::get,
     Router,
 };
-
-use std::{
-    collections::{HashMap, HashSet},
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    sync::{Arc, Mutex},
-};
+use futures::{SinkExt, StreamExt};
+use std::{net::SocketAddr, sync::Arc};
 use tower_http::{compression::CompressionLayer, services::ServeDir};
-use tracing::{info, instrument};
 
-use common::ClientId;
+use common::ClientMessage;
 
-struct GameServer {}
+mod server;
+use server::GameServer;
 
 #[tokio::main]
 async fn main() {
-    let subscriber = tracing_subscriber::fmt().with_target(false).finish();
-    tracing::subscriber::set_global_default(subscriber).unwrap();
+    colog::init();
 
     let app = Router::new();
 
     let serve_game_dir = ServeDir::new("./static/game").append_index_html_on_directories(true);
     let serve_editor_dir = ServeDir::new("./static/editor").append_index_html_on_directories(true);
     let serve_assets_dir = ServeDir::new("./static/assets").append_index_html_on_directories(false);
+    let serve_maps_dir = ServeDir::new("./static/maps").append_index_html_on_directories(false);
 
-    let state = Arc::new(GameServer {});
+    let server = Arc::new(GameServer::default());
 
     let app = app
         .route("/ws", get(ws_handler))
         .nest_service("/editor", serve_editor_dir)
         .nest_service("/assets", serve_assets_dir)
+        .nest_service("/maps", serve_maps_dir)
         .fallback_service(serve_game_dir)
-        .with_state(state);
+        .with_state(server);
 
     let compression = CompressionLayer::new()
         .gzip(true)
@@ -51,7 +46,7 @@ async fn main() {
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
 
-    info!(
+    log::info!(
         "ready! listening on port {}",
         listener.local_addr().unwrap().port()
     );
@@ -65,20 +60,85 @@ async fn main() {
 
 async fn ws_handler(
     ws: WebSocketUpgrade,
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    headers: HeaderMap,
-    State(state): State<Arc<GameServer>>,
+    State(server): State<Arc<GameServer>>,
 ) -> impl IntoResponse {
-    let client_id = ClientId::new();
-    ws.on_upgrade(move |socket| handle_client(socket, client_id, addr, state))
+    ws.on_upgrade(move |socket| handle_client(socket, server))
 }
 
-#[instrument(skip(socket, state))]
-async fn handle_client(
-    socket: WebSocket,
-    client_id: ClientId,
-    client_addr: SocketAddr,
-    state: Arc<GameServer>,
-) {
-    info!("client connected!");
+async fn handle_client(socket: WebSocket, server: Arc<GameServer>) {
+    let client_id = server.allocate_client();
+    log::info!("({}) client connecting", client_id);
+
+    let (mut socket_tx, mut socket_rx) = socket.split();
+
+    let client_name = if let Some(Ok(Message::Binary(msg))) = socket_rx.next().await {
+        match ClientMessage::from_bytes(&msg) {
+            Ok(ClientMessage::Register { name }) => name,
+            Ok(_) => {
+                log::warn!("client didnt register before sending data");
+                return;
+            }
+            Err(e) => {
+                log::warn!("client sent invalid register message: {}", e);
+                return;
+            }
+        }
+    } else {
+        log::warn!("client didnt send register message");
+        return;
+    };
+    log::info!(
+        "({}) client connected with name '{}'",
+        client_id,
+        client_name
+    );
+
+    let mut msg_rx = server.register_client(client_id, client_name).await;
+
+    let rx_task = {
+        let server = server.clone();
+        tokio::spawn(async move {
+            while let Some(Ok(Message::Binary(msg))) = socket_rx.next().await {
+                let msg = match ClientMessage::from_bytes(&msg) {
+                    Ok(msg) => msg,
+                    Err(e) => {
+                        log::warn!("client sent invalid message: {}", e);
+                        continue;
+                    }
+                };
+
+                if matches!(msg, ClientMessage::Register { .. }) {
+                    log::warn!("client tried to register again");
+                    continue;
+                }
+
+                server.handle_client_message(client_id, msg).await;
+            }
+        })
+    };
+
+    let tx_task = tokio::spawn(async move {
+        while let Some(msg) = msg_rx.recv().await {
+            let msg = match msg.to_bytes() {
+                Ok(msg) => msg,
+                Err(e) => {
+                    log::warn!("error serializing message: {}", e);
+                    continue;
+                }
+            };
+
+            if let Err(e) = socket_tx.send(Message::Binary(msg)).await {
+                log::warn!("error sending message to client: {}", e);
+                break;
+            }
+        }
+    });
+
+    tokio::select! {
+        _ = rx_task => (),
+        _ = tx_task => ()
+    }
+
+    server.remove_client(client_id).await;
+    log::info!("({}) client disconnected", client_id);
 }

@@ -1,6 +1,5 @@
 pub use glam::f32::*;
 pub use glam::u32::*;
-pub use image::GenericImageView;
 
 use tar::Archive;
 pub type MapFile<R> = Archive<R>;
@@ -111,5 +110,10 @@ impl Segment {
 
     pub fn interpolate(&self, t: f32) -> Vec2 {
         self.start + (self.end - self.start) * t
+    }
+
+    pub fn round(&mut self) {
+        self.start = self.start.round();
+        self.end = self.end.round();
     }
 }

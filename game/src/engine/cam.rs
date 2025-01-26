@@ -7,6 +7,7 @@ pub struct Camera {
     pub transform: Transform,
     proj: Mat4,
     fov_rad: f32,
+    aspect: f32,
 }
 
 pub struct CameraUniforms {
@@ -35,6 +36,7 @@ impl Camera {
             transform: Transform::new(),
             proj: Mat4::default(),
             fov_rad: fov.to_radians(),
+            aspect: viewport.x / viewport.y,
         };
 
         cam.resize(viewport);
@@ -42,9 +44,17 @@ impl Camera {
         cam
     }
 
+    pub fn set_fov(&mut self, fov: f32) {
+        let fov = fov.to_radians();
+        if fov != self.fov_rad {
+            self.fov_rad = fov;
+            self.proj = Mat4::perspective_rh(fov, self.aspect, 0.1, 1000.0);
+        }
+    }
+
     pub fn resize(&mut self, viewport: Vec2) {
-        let aspect = viewport.x / viewport.y;
-        self.proj = Mat4::perspective_rh(self.fov_rad, aspect, 0.1, 1000.0);
+        self.aspect = viewport.x / viewport.y;
+        self.proj = Mat4::perspective_rh(self.fov_rad, self.aspect, 0.1, 1000.0);
     }
 
     pub fn view(&self) -> Mat4 {

@@ -15,9 +15,8 @@ log = "0.4.22"
 wasm-bindgen-futures = "0.4.49"
 egui_extras = { version = "0.30", features = ["http", "image"] }
 egui-phosphor = { version = "0.8.0", default-features = false, features = ["bold"] }
-enumflags2 = "0.7.10"
 js-sys = "0.3.77"
-poll-promise = { version = "0.3.0", features = ["web"] }
+poll-promise = { version = "0.3", features = ["web"] }
 indexed_db_futures = { version = "0.6.0", features = ["serde", "async-upgrade"] }
 serde = { version = "1.0", default-features = false, features = ["derive", "std"] }
 earcut = "0.4.2"
@@ -35,13 +34,6 @@ features = [
     "Element",
     "HtmlElement",
     "FileReader"
-]
-
-[dependencies.image]
-version = "0.25"
-default-features = false
-features = [
-    "png"
 ]
 
 [profile.release]

@@ -3,7 +3,7 @@ use crate::engine::{
     sprite::{Billboard, SpriteSheet},
     RenderContext, UpdateContext,
 };
-use common::types::*;
+use common::{types::*, ClientMessage, PlayerUpdate};
 
 const ROTATION_OFFSET: f32 = -92.0;
 
@@ -14,7 +14,6 @@ pub struct Player {
     acceleration: Vec2,
 
     camera_angle: f32,
-    camera_angle_velocity: f32,
     look_back: bool,
 }
 
@@ -36,7 +35,6 @@ impl Player {
             acceleration: Vec2::new(0.0, 0.0),
 
             camera_angle: 0.0,
-            camera_angle_velocity: 0.0,
             look_back: false,
         }
     }
@@ -56,14 +54,6 @@ impl Object for Player {
                 self.velocity.x = self.velocity.x.max(-10.0);
             }
 
-            "ArrowLeft" => {
-                self.camera_angle_velocity = 0.6;
-                self.look_back = false;
-            }
-            "ArrowRight" => {
-                self.camera_angle_velocity = -0.6;
-                self.look_back = false;
-            }
             "ArrowDown" => self.look_back = true,
             _ => {}
         }
@@ -91,16 +81,6 @@ impl Object for Player {
                 }
             }
 
-            "ArrowLeft" => {
-                if self.camera_angle_velocity > 0.0 {
-                    self.camera_angle_velocity = 0.0
-                }
-            }
-            "ArrowRight" => {
-                if self.camera_angle_velocity < 0.0 {
-                    self.camera_angle_velocity = 0.0
-                }
-            }
             "ArrowDown" => self.look_back = false,
 
             _ => {}
@@ -109,8 +89,8 @@ impl Object for Player {
 
     fn update(&mut self, ctx: &mut UpdateContext) {
         self.velocity += self.acceleration;
-        self.velocity.y -= self.velocity.y * 0.01;
-        self.velocity.x -= self.velocity.x * 0.05;
+        self.velocity.y -= self.velocity.y * 0.015;
+        self.velocity.x -= self.velocity.x * 0.09;
 
         let forward = Vec3::new(
             self.rot.y.to_radians().cos(),
@@ -123,29 +103,31 @@ impl Object for Player {
         let new_pos = self.pos + forward * self.velocity.y * ctx.dt;
         self.pos = new_pos;
 
-        if self.look_back {
-            if self.camera_angle > 0.0 && self.camera_angle < 180.0 {
-                self.camera_angle_velocity += 50.0 * ctx.dt;
-                self.camera_angle_velocity = self.camera_angle_velocity.max(10.0)
-            } else if self.camera_angle <= 0.0 && self.camera_angle > -180.0 {
-                self.camera_angle_velocity -= 50.0 * ctx.dt;
-                self.camera_angle_velocity = self.camera_angle_velocity.min(-10.0)
-            } else {
-                self.camera_angle_velocity = 0.0;
-            }
-        }
-        self.camera_angle += self.camera_angle_velocity;
-        if self.camera_angle_velocity == 0.0 && !self.look_back {
-            self.camera_angle *= 0.9;
-        }
+        let rot_diff = self.rot.y - self.camera_angle;
+        self.camera_angle = self.camera_angle + 0.012 * rot_diff;
 
         let camera_forward = Vec3::new(
-            (self.rot.y + self.camera_angle).to_radians().cos(),
+            self.camera_angle.to_radians().cos(),
             0.0,
-            (self.rot.y + self.camera_angle).to_radians().sin(),
+            self.camera_angle.to_radians().sin(),
         );
-        ctx.cam.transform.pos = self.pos - camera_forward * 8.0 + Vec3::new(0.0, 2.0, 0.0);
-        ctx.cam.transform.rot = Rotation::new(-10.0, self.rot.y + self.camera_angle, self.rot.z);
+        let camera_right = Vec3::new(
+            (self.camera_angle + 90.0).to_radians().cos(),
+            0.0,
+            (self.camera_angle + 90.0).to_radians().sin(),
+        );
+        let camera_shift = camera_right * rot_diff * 0.005;
+        ctx.cam.transform.pos =
+            self.pos - camera_forward * 5.0 + Vec3::new(0.0, 1.2, 0.0) + camera_shift;
+        ctx.cam.transform.rot = Rotation::new(-10.0, self.camera_angle, self.rot.z);
+        ctx.cam.set_fov(60.0 + self.velocity.y * 0.3);
+
+        if ctx.tick {
+            ctx.send_msg(ClientMessage::PlayerUpdate(PlayerUpdate {
+                pos: Vec2::new(self.pos.x, self.pos.z),
+                rot: self.rot.y,
+            }));
+        }
     }
 
     fn render(&self, ctx: &RenderContext) {

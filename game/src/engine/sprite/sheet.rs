@@ -50,7 +50,7 @@ impl SpriteSheet {
         let map_tex = SPRITE_ASSETS.get_file(asset).unwrap().contents();
         let map_img = image::load_from_memory(map_tex).unwrap();
 
-        Self::from_images(gl, &[map_img])
+        Self::from_images(gl, &[&map_img])
     }
 
     pub fn load_multi(gl: &Context, asset: &str) -> Self {
@@ -61,11 +61,13 @@ impl SpriteSheet {
             match image::load_from_memory(sprite_tex) {
                 Ok(sprite_img) => sprite_imgs.push(sprite_img),
                 Err(e) => {
-                    crate::console_log!("skipping invalid sprite '{:?}': {:?}", sprite.path(), e);
+                    log::warn!("skipping invalid sprite '{:?}': {:?}", sprite.path(), e);
                     continue;
                 }
             }
         }
+
+        let sprite_imgs: Vec<_> = sprite_imgs.iter().collect();
 
         Self::from_images(gl, &sprite_imgs)
     }
@@ -127,7 +129,7 @@ impl SpriteSheet {
         }
     }
 
-    pub fn from_images(gl: &Context, imgs: &[DynamicImage]) -> Self {
+    pub fn from_images(gl: &Context, imgs: &[&DynamicImage]) -> Self {
         debug_assert!(!imgs.is_empty(), "spritesheet must have at least one image");
 
         let sprite_dimension = imgs[0].dimensions();
@@ -144,7 +146,7 @@ impl SpriteSheet {
             ImageBuffer::new(sprite_dimension.x * imgs.len() as u32, sprite_dimension.y);
         imgs.iter().enumerate().for_each(|(i, img)| {
             sheet
-                .copy_from(img, sprite_dimension.x * i as u32, 0)
+                .copy_from(*img, sprite_dimension.x * i as u32, 0)
                 .unwrap();
         });
 
