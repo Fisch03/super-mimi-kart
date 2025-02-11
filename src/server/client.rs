@@ -1,4 +1,4 @@
-use common::{types::*, ClientId, PlayerUpdate, ServerMessage};
+use common::{types::*, ClientId, PlayerState, ServerMessage};
 use tokio::sync::mpsc;
 
 #[derive(Debug)]
@@ -58,7 +58,7 @@ impl ClientState {
 }
 
 impl IngameState {
-    pub fn update(&mut self, update: PlayerUpdate) {
+    pub fn update(&mut self, update: PlayerState) {
         self.pos = update.pos;
         self.rot = update.rot;
     }
@@ -76,6 +76,10 @@ impl Client {
 
     pub fn id(&self) -> ClientId {
         self.id
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     pub fn send(&self, message: ServerMessage) {

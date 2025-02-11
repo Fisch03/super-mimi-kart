@@ -1,5 +1,5 @@
 use common::{
-    ClientId, ClientMessage, PlayerUpdate, RoundInitParams, ServerMessage, COUNTDOWN_DURATION,
+    ClientId, ClientMessage, PlayerState, RoundInitParams, ServerMessage, COUNTDOWN_DURATION,
     TICKS_PER_SECOND,
 };
 use rand::seq::SliceRandom;
@@ -197,23 +197,34 @@ impl GameServer {
                 }
             };
 
-            let mut start_pos = 0;
-            let mut players_in_round: Vec<ClientId> = self.with_inner(|inner| {
-                loaded
-                    .choose_multiple(&mut rand::thread_rng(), loaded.len())
-                    .filter(|id| {
+            let mut players_in_round: Vec<ClientId> = loaded
+                .choose_multiple(&mut rand::thread_rng(), loaded.len())
+                .map(|id| *id)
+                .collect();
+
+            let start_positions: Vec<_> = self.with_inner(|inner| {
+                players_in_round
+                    .iter()
+                    .filter_map(|id| {
                         if let Some(client) = inner.clients.get_mut(id) {
-                            client.send(ServerMessage::StartRound {
-                                params: RoundInitParams { start_pos },
-                            });
-                            start_pos += 1;
-                            true
+                            Some((client.id(), client.name().to_string()))
                         } else {
-                            false
+                            None
                         }
                     })
-                    .map(|id| *id)
                     .collect()
+            });
+            (0..start_positions.len()).for_each(|i| {
+                let (id, _) = start_positions[i];
+                self.send(
+                    SendTo::Only(id),
+                    ServerMessage::StartRound {
+                        params: RoundInitParams {
+                            start_pos: i,
+                            players: start_positions.clone(),
+                        },
+                    },
+                );
             });
 
             log::info!("waiting for race countdown to finish");
@@ -244,7 +255,7 @@ impl GameServer {
 
                         player_updates.push((
                             id,
-                            PlayerUpdate {
+                            PlayerState {
                                 pos: ingame_client.pos,
                                 rot: ingame_client.rot,
                             },
@@ -353,7 +364,11 @@ impl GameServer {
                         );
                     }
                 }
-
+                ClientMessage::PlayerUpdate(_) => log::trace!(
+                    "ignoring player update from client {:?} in state {:?}",
+                    client_id,
+                    state
+                ),
                 _ => log::warn!(
                     "ignoring unexpected message from client {}: {:?}",
                     client_id,

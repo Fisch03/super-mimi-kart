@@ -32,7 +32,7 @@ pub enum ServerMessage {
 
     // update the positions of all players
     RaceUpdate {
-        players: Vec<(ClientId, PlayerUpdate)>,
+        players: Vec<(ClientId, PlayerState)>,
     },
 
     // round has ended, show placements
@@ -52,9 +52,9 @@ impl ServerMessage {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientMessage {
-    Register { name: String },  // register a new player
-    LoadedMap,                  // client has loaded the map
-    PlayerUpdate(PlayerUpdate), // update the player's position
+    Register { name: String }, // register a new player
+    LoadedMap,                 // client has loaded the map
+    PlayerUpdate(PlayerState), // update the player's position
 }
 impl ClientMessage {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, postcard::Error> {
@@ -66,7 +66,7 @@ impl ClientMessage {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PlayerUpdate {
+pub struct PlayerState {
     pub pos: Vec2,
     pub rot: f32,
 }
@@ -74,6 +74,7 @@ pub struct PlayerUpdate {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoundInitParams {
     pub start_pos: usize,
+    pub players: Vec<(ClientId, String)>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]

@@ -3,7 +3,7 @@ use crate::engine::{
     sprite::{Billboard, SpriteSheet},
     RenderContext, UpdateContext,
 };
-use common::{types::*, ClientMessage, PlayerUpdate};
+use common::{types::*, ClientMessage, PlayerState};
 
 const ROTATION_OFFSET: f32 = -92.0;
 
@@ -123,7 +123,7 @@ impl Object for Player {
         ctx.cam.set_fov(60.0 + self.velocity.y * 0.3);
 
         if ctx.tick {
-            ctx.send_msg(ClientMessage::PlayerUpdate(PlayerUpdate {
+            ctx.send_msg(ClientMessage::PlayerUpdate(PlayerState {
                 pos: Vec2::new(self.pos.x, self.pos.z),
                 rot: self.rot.y,
             }));
