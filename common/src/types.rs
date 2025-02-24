@@ -6,6 +6,11 @@ pub type MapFile<R> = Archive<R>;
 
 pub type Position = Vec3;
 
+pub struct Rect {
+    pub pos: Vec2,
+    pub size: Vec2,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Rotation(pub Vec3);
 impl Rotation {

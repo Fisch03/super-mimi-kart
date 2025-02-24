@@ -1,6 +1,6 @@
 use crate::engine::{
     mesh::Mesh,
-    object::{Object, Transform},
+    object::{Collision, Object, Transform},
     sprite::{SpriteSheet, SPRITE_QUAD},
     RenderContext,
 };
@@ -8,7 +8,15 @@ use common::types::*;
 use glow::*;
 use image::DynamicImage;
 
-const SCALE: f32 = 100.0;
+pub const MAP_SCALE: f32 = 20.0;
+
+pub fn map_coord_to_world(pos: Vec2) -> Vec2 {
+    (pos / MAP_SCALE) * 2.0
+}
+
+pub fn world_coord_to_map(pos: Vec2) -> Vec2 {
+    (pos / 2.0) * MAP_SCALE
+}
 
 #[derive(Debug)]
 pub struct Map {
@@ -22,11 +30,11 @@ impl Map {
         let sheet = SpriteSheet::from_images(gl, &[texture]);
 
         let dimensions = sheet.sprite_dimensions();
-        let dimensions = Vec2::new(dimensions.x as f32, dimensions.y as f32);
-        let aspect = dimensions.x / dimensions.y;
+        let dimensions = Vec2::new(dimensions.x as f32, dimensions.y as f32) / MAP_SCALE;
+        // let aspect = dimensions.x / dimensions.y;
 
         let transform = Transform::new()
-            .scale(SCALE, 1.0, SCALE / aspect)
+            .scale(dimensions.x, 1.0, dimensions.y)
             .position(0.0, -0.65, 0.0);
 
         Self {
@@ -37,7 +45,11 @@ impl Map {
     }
 
     pub fn map_coord_to_world(&self, pos: Vec2) -> Vec2 {
-        (pos / self.dimensions) * SCALE * 2.0
+        map_coord_to_world(pos)
+    }
+
+    pub fn world_coord_to_map(&self, pos: Vec2) -> Vec2 {
+        world_coord_to_map(pos)
     }
 }
 

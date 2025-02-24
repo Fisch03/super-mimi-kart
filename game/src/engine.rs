@@ -1,4 +1,8 @@
-use common::ClientMessage;
+use crate::game::{
+    objects::map::{map_coord_to_world, world_coord_to_map},
+    Collider,
+};
+use common::{types::*, ClientMessage};
 
 mod shaders;
 pub use shaders::Shaders;
@@ -24,10 +28,20 @@ impl core::ops::Deref for RenderContext<'_> {
 }
 
 pub struct UpdateContext<'a> {
-    pub cam: &'a mut Camera,
-    pub send_msg: &'a mut dyn FnMut(ClientMessage),
     pub dt: f32,
     pub tick: bool,
+    pub send_msg: &'a mut dyn FnMut(ClientMessage),
+    pub colliders: &'a [Collider],
+}
+
+impl UpdateContext<'_> {
+    pub fn world_coord_to_map(&self, pos: Vec2) -> Vec2 {
+        world_coord_to_map(pos)
+    }
+
+    pub fn map_coord_to_world(&self, pos: Vec2) -> Vec2 {
+        map_coord_to_world(pos)
+    }
 }
 
 impl<'a> UpdateContext<'a> {

@@ -6,23 +6,25 @@ use web_sys::WebSocket;
 use crate::engine::{object::Object, Camera, RenderContext, Shaders, UpdateContext};
 
 mod map;
+pub use map::Collider;
 use map::{MapDownload, MapToScene};
-mod objects;
+pub mod objects;
 
 #[derive(Debug)]
 enum State {
     WaitingToJoin,
-    Loading {
-        map_download: MapDownload,
-    },
-    WaitingToStart {
-        map: Map,
-    },
-    Running {
-        cam: Camera,
-        objects: Vec<Box<dyn Object>>,
-        map: Map,
-    },
+    Loading { map_download: MapDownload },
+    WaitingToStart { map: Map },
+    Running { scene: Scene, map: Map },
+}
+
+#[derive(Debug)]
+struct Scene {
+    cam: Camera,
+    player: objects::Player,
+    colliders: Vec<Collider>,
+    objects: Vec<Box<dyn Object>>,
+    map_dimensions: Vec2,
 }
 
 impl std::fmt::Display for State {
@@ -86,8 +88,8 @@ impl Game {
         unsafe { self.gl.viewport(0, 0, dim.x as i32, dim.y as i32) };
 
         match &mut self.state {
-            State::Running { cam, .. } => {
-                cam.resize(dim);
+            State::Running { scene, .. } => {
+                scene.cam.resize(dim);
             }
             _ => {}
         }
@@ -95,16 +97,16 @@ impl Game {
 
     pub fn key_down(&mut self, key: String) {
         match &mut self.state {
-            State::Running { objects, .. } => {
-                objects.iter_mut().for_each(|o| o.key_down(&key));
+            State::Running { scene, .. } => {
+                scene.player.key_down(&key);
             }
             _ => {}
         }
     }
     pub fn key_up(&mut self, key: String) {
         match &mut self.state {
-            State::Running { objects, .. } => {
-                objects.iter_mut().for_each(|o| o.key_up(&key));
+            State::Running { scene, .. } => {
+                scene.player.key_up(&key);
             }
             _ => {}
         }
@@ -137,22 +139,22 @@ impl Game {
                         State::WaitingToStart { map } => map.clone(),
                         _ => unreachable!(),
                     };
-                    let objects = map.to_scene(&self.gl, &params);
-                    let cam = Camera::new(60.0, self.viewport);
-                    self.state = State::Running { cam, objects, map };
+                    let scene = map.to_scene(&self.gl, self.viewport, &params);
+                    self.state = State::Running { map, scene };
                 }
 
+                ServerMessage::RaceUpdate { .. } => {}
                 _ => log::warn!("ignoring unexpected message: {:?}", msg),
             }
         }
 
         // update
         match &mut self.state {
-            State::Running { cam, objects, .. } => {
+            State::Running { scene, .. } => {
                 let mut ctx = UpdateContext {
                     dt,
                     tick,
-                    cam,
+                    colliders: &scene.colliders,
                     send_msg: &mut |msg| {
                         let bytes = msg.to_bytes().unwrap();
                         match self.ws.send_with_u8_array(&bytes) {
@@ -161,7 +163,11 @@ impl Game {
                         }
                     },
                 };
-                objects.iter_mut().for_each(|o| o.update(&mut ctx));
+
+                scene.objects.iter_mut().for_each(|o| o.update(&mut ctx));
+
+                scene.player.update(&mut ctx);
+                scene.player.update_cam(&mut scene.cam);
             }
             State::Loading { map_download } => {
                 let map = match map_download.poll() {
@@ -193,13 +199,16 @@ impl Game {
         };
 
         match &self.state {
-            State::Running { cam, objects, .. } => {
+            State::Running { scene, .. } => {
                 let ctx = RenderContext {
                     gl: &self.gl,
                     shaders: &self.shaders,
-                    cam: &cam,
+                    cam: &scene.cam,
                 };
-                objects.iter().for_each(|o| o.render(&ctx));
+
+                // why does player transparency not work when the player is rendered first??
+                scene.objects.iter().for_each(|o| o.render(&ctx));
+                scene.player.render(&ctx);
             }
             _ => log::warn!("todo: render state {}", self.state),
         }
@@ -212,8 +221,9 @@ impl Drop for Game {
         self.shaders.cleanup(&self.gl);
 
         match &mut self.state {
-            State::Running { objects, .. } => {
-                objects.iter_mut().for_each(|o| o.cleanup(&self.gl));
+            State::Running { scene, .. } => {
+                scene.player.cleanup(&self.gl);
+                scene.objects.iter_mut().for_each(|o| o.cleanup(&self.gl));
             }
             _ => {}
         }

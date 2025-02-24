@@ -1,17 +1,31 @@
-use crate::engine::object::{Object, Transform};
-use common::{map::*, RoundInitParams};
+use super::Scene;
+use crate::engine::{
+    object::{Object, Transform},
+    Camera,
+};
+use common::{map::*, types::*, RoundInitParams};
+use nalgebra::Point2;
+use ncollide2d::shape::Polyline;
 use poll_promise::Promise;
 
+pub struct Collider(pub Polyline<f32>);
+impl std::fmt::Debug for Collider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Collider").finish()
+    }
+}
+
 pub trait MapToScene {
-    fn to_scene(&self, gl: &glow::Context, params: &RoundInitParams) -> Vec<Box<dyn Object>>;
+    fn to_scene(&self, gl: &glow::Context, viewport: Vec2, params: &RoundInitParams) -> Scene;
 }
 
 impl MapToScene for Map {
-    fn to_scene(&self, gl: &glow::Context, params: &RoundInitParams) -> Vec<Box<dyn Object>> {
+    fn to_scene(&self, gl: &glow::Context, viewport: Vec2, params: &RoundInitParams) -> Scene {
         use crate::game::objects;
         let mut objects: Vec<Box<dyn Object>> = Vec::new();
 
-        let map = objects::Map::new(gl, &self.assets()[self.background.unwrap()].image);
+        let map_image = &self.assets()[self.background.unwrap()].image;
+        let map = objects::Map::new(gl, &map_image);
         let player_start = self.track.iter_starts().nth(params.start_pos).unwrap();
         let player_start = map.map_coord_to_world(player_start);
         objects.push(Box::new(map));
@@ -22,9 +36,26 @@ impl MapToScene for Map {
                 .position(player_start.x, 0.0, player_start.y)
                 .rotation(0.0, 270.0, 0.0),
         );
-        objects.push(Box::new(player));
 
-        objects
+        let cam = Camera::new(60.0, viewport);
+
+        let colliders = self
+            .colliders
+            .iter()
+            .map(|c| {
+                let points = c.shape.iter().map(|p| Point2::new(p.x, p.y)).collect();
+                log::info!("collider: {:?}", points);
+                Collider(Polyline::new(points, None))
+            })
+            .collect();
+
+        Scene {
+            player,
+            colliders,
+            objects,
+            cam,
+            map_dimensions: Vec2::new(map_image.width() as f32, map_image.height() as f32),
+        }
     }
 }
 

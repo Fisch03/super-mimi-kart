@@ -1,9 +1,12 @@
 use crate::engine::{
     object::{Object, Transform},
     sprite::{Billboard, SpriteSheet},
-    RenderContext, UpdateContext,
+    Camera, RenderContext, UpdateContext,
 };
 use common::{types::*, ClientMessage, PlayerState};
+
+use ncollide2d::math::{Isometry, Vector};
+use ncollide2d::shape::Ball;
 
 const ROTATION_OFFSET: f32 = -92.0;
 
@@ -15,6 +18,7 @@ pub struct Player {
 
     camera_angle: f32,
     look_back: bool,
+    collider: Ball<f32>,
 }
 
 impl Player {
@@ -36,12 +40,30 @@ impl Player {
 
             camera_angle: 0.0,
             look_back: false,
+            collider: Ball::new(6.0),
         }
     }
-}
 
-impl Object for Player {
-    fn key_down(&mut self, key: &str) {
+    pub fn update_cam(&self, cam: &mut Camera) {
+        let camera_forward = Vec3::new(
+            self.camera_angle.to_radians().cos(),
+            0.0,
+            self.camera_angle.to_radians().sin(),
+        );
+        // let camera_right = Vec3::new(
+        //     (self.camera_angle + 90.0).to_radians().cos(),
+        //     0.0,
+        //     (self.camera_angle + 90.0).to_radians().sin(),
+        // );
+        // let camera_shift = camera_right * rot_diff * 0.005;
+
+        cam.transform.pos =
+            self.pos - camera_forward * 5.0 + Vec3::new(0.0, 1.2, 0.0) /* + camera_shift */;
+        cam.transform.rot = Rotation::new(-10.0, self.camera_angle, self.rot.z);
+        cam.set_fov(60.0 + self.velocity.y * 0.3);
+    }
+
+    pub fn key_down(&mut self, key: &str) {
         match key {
             "KeyW" => self.acceleration.y = 0.4,
             "KeyS" => self.acceleration.y = -0.4,
@@ -58,7 +80,7 @@ impl Object for Player {
             _ => {}
         }
     }
-    fn key_up(&mut self, key: &str) {
+    pub fn key_up(&mut self, key: &str) {
         match key {
             "KeyW" => {
                 if self.acceleration.y > 0.0 {
@@ -86,7 +108,9 @@ impl Object for Player {
             _ => {}
         }
     }
+}
 
+impl Object for Player {
     fn update(&mut self, ctx: &mut UpdateContext) {
         self.velocity += self.acceleration;
         self.velocity.y -= self.velocity.y * 0.015;
@@ -100,27 +124,39 @@ impl Object for Player {
 
         self.rot.y += self.velocity.x * ctx.dt * 0.1;
 
-        let new_pos = self.pos + forward * self.velocity.y * ctx.dt;
+        let mut new_pos = self.pos + forward * self.velocity.y * ctx.dt;
+
+        //TODO: it would be a lot nicer to perform the collider pos translations at the beginning
+        //but that didnt work the last time i tried it(?)
+        let new_pos_map = ctx.world_coord_to_map(Vec2::new(new_pos.x, new_pos.z));
+        let own_pos = Isometry::new(Vector::new(new_pos_map.x, new_pos_map.y), 0.0);
+        let collider_pos = Isometry::new(nalgebra::zero(), 0.0);
+        for collider in ctx.colliders {
+            use ncollide2d::query;
+            if let Some(contact) = query::contact(
+                &own_pos,
+                &self.collider,
+                &collider_pos,
+                &collider.0,
+                nalgebra::zero(),
+            ) {
+                let translation_map = Vec2::new(contact.normal.x, contact.normal.y) * contact.depth;
+                let translation = ctx.map_coord_to_world(translation_map);
+                new_pos = Vec3::new(
+                    new_pos.x - translation.x,
+                    new_pos.y,
+                    new_pos.z - translation.y,
+                );
+
+                self.velocity.y = 0.0;
+                // self.acceleration.y = 0.0;
+            }
+        }
+
         self.pos = new_pos;
 
         let rot_diff = self.rot.y - self.camera_angle;
         self.camera_angle = self.camera_angle + 0.012 * rot_diff;
-
-        let camera_forward = Vec3::new(
-            self.camera_angle.to_radians().cos(),
-            0.0,
-            self.camera_angle.to_radians().sin(),
-        );
-        let camera_right = Vec3::new(
-            (self.camera_angle + 90.0).to_radians().cos(),
-            0.0,
-            (self.camera_angle + 90.0).to_radians().sin(),
-        );
-        let camera_shift = camera_right * rot_diff * 0.005;
-        ctx.cam.transform.pos =
-            self.pos - camera_forward * 5.0 + Vec3::new(0.0, 1.2, 0.0) + camera_shift;
-        ctx.cam.transform.rot = Rotation::new(-10.0, self.camera_angle, self.rot.z);
-        ctx.cam.set_fov(60.0 + self.velocity.y * 0.3);
 
         if ctx.tick {
             ctx.send_msg(ClientMessage::PlayerUpdate(PlayerState {

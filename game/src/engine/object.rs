@@ -10,10 +10,18 @@ where
     fn update(&mut self, _ctx: &mut UpdateContext) {}
     fn render(&self, ctx: &RenderContext);
 
-    fn key_down(&mut self, _key: &str) {}
-    fn key_up(&mut self, _key: &str) {}
+    // fn key_down(&mut self, _key: &str) {}
+    // fn key_up(&mut self, _key: &str) {}
 
     fn cleanup(&self, gl: &Context);
+
+    fn check_collision(&self, _player: Rect) -> Option<Collision> {
+        None
+    }
+}
+
+pub struct Collision {
+    normal: Vec2,
 }
 
 #[derive(Debug, Clone)]
