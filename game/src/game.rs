@@ -1,5 +1,6 @@
-use common::{map::Map, types::*, ClientMessage, ServerMessage};
+use common::{map::Map, types::*, ClientId, ClientMessage, ServerMessage};
 use glow::*;
+use std::collections::HashMap;
 use std::sync::mpsc;
 use web_sys::WebSocket;
 
@@ -21,7 +22,9 @@ enum State {
 #[derive(Debug)]
 struct Scene {
     cam: Camera,
+    own_id: ClientId,
     player: objects::Player,
+    players: HashMap<ClientId, objects::ExternalPlayer>,
     colliders: Vec<Collider>,
     objects: Vec<Box<dyn Object>>,
     map_dimensions: Vec2,
@@ -143,7 +146,20 @@ impl Game {
                     self.state = State::Running { map, scene };
                 }
 
-                ServerMessage::RaceUpdate { .. } => {}
+                ServerMessage::RaceUpdate { players }
+                    if matches!(self.state, State::Running { .. }) =>
+                {
+                    let scene = match &mut self.state {
+                        State::Running { scene, .. } => scene,
+                        _ => unreachable!(),
+                    };
+
+                    for (id, state) in players {
+                        if let Some(player) = scene.players.get_mut(&id) {
+                            player.update_state(state);
+                        }
+                    }
+                }
                 _ => log::warn!("ignoring unexpected message: {:?}", msg),
             }
         }
@@ -165,6 +181,10 @@ impl Game {
                 };
 
                 scene.objects.iter_mut().for_each(|o| o.update(&mut ctx));
+                scene
+                    .players
+                    .iter_mut()
+                    .for_each(|(_, p)| p.update(&mut ctx));
 
                 scene.player.update(&mut ctx);
                 scene.player.update_cam(&mut scene.cam);
@@ -206,9 +226,28 @@ impl Game {
                     cam: &scene.cam,
                 };
 
-                // why does player transparency not work when the player is rendered first??
-                scene.objects.iter().for_each(|o| o.render(&ctx));
-                scene.player.render(&ctx);
+                let mut depth_objects: Vec<(&dyn Object, f32)> = scene
+                    .objects
+                    .iter()
+                    .map(|o| o.as_ref() as &dyn Object)
+                    .chain(scene.players.values().map(|o| o as &dyn Object))
+                    .chain(std::iter::once(&scene.player as &dyn Object))
+                    .filter_map(|o| {
+                        if let Some(depth) = o.transparency_depth(&ctx.cam) {
+                            Some((o, depth))
+                        } else {
+                            // render non-transparent objects immediately
+                            o.render(&ctx);
+                            None
+                        }
+                    })
+                    .collect();
+
+                // sort by depth
+                depth_objects.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+                for (o, _) in depth_objects {
+                    o.render(&ctx);
+                }
             }
             _ => log::warn!("todo: render state {}", self.state),
         }

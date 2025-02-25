@@ -27,6 +27,11 @@ impl Billboard {
         }
     }
 
+    pub fn camera_depth(&self, cam: &Camera) -> f32 {
+        let to_cam = cam.transform.pos - self.transform.pos;
+        to_cam.length_squared()
+    }
+
     pub fn render(&self, ctx: &RenderContext) {
         ctx.shaders.billboard.render(ctx, self);
     }

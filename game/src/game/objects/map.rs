@@ -1,6 +1,6 @@
 use crate::engine::{
     mesh::Mesh,
-    object::{Collision, Object, Transform},
+    object::{Object, Transform},
     sprite::{SpriteSheet, SPRITE_QUAD},
     RenderContext,
 };

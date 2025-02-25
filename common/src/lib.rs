@@ -13,7 +13,7 @@ pub enum ServerMessage {
     PrepareRound {
         map: String,
     },
-    //
+
     // number of players has changed
     PlayerCountChanged {
         count: usize,
@@ -73,6 +73,7 @@ pub struct PlayerState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoundInitParams {
+    pub client_id: ClientId,
     pub start_pos: usize,
     pub players: Vec<(ClientId, String)>,
 }
@@ -81,7 +82,18 @@ pub struct RoundInitParams {
 pub struct ClientId(u32);
 impl ClientId {
     pub fn new(id: u32) -> Self {
+        if id == 0 {
+            panic!("Client id cannot be 0");
+        }
         Self(id)
+    }
+
+    pub fn invalid() -> Self {
+        Self(0)
+    }
+
+    pub fn is_valid(&self) -> bool {
+        self.0 != 0
     }
 
     pub fn as_u32(&self) -> u32 {

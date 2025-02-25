@@ -26,16 +26,36 @@ impl MapToScene for Map {
 
         let map_image = &self.assets()[self.background.unwrap()].image;
         let map = objects::Map::new(gl, &map_image);
+
         let player_start = self.track.iter_starts().nth(params.start_pos).unwrap();
         let player_start = map.map_coord_to_world(player_start);
-        objects.push(Box::new(map));
-
         let player = objects::Player::new(
             gl,
             Transform::new()
                 .position(player_start.x, 0.0, player_start.y)
                 .rotation(0.0, 270.0, 0.0),
         );
+
+        let players = params
+            .players
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != params.start_pos)
+            .map(|(i, (id, name))| {
+                let start = self.track.iter_starts().nth(i).unwrap();
+                let start = map.map_coord_to_world(start);
+                (
+                    *id,
+                    objects::ExternalPlayer::new(
+                        gl,
+                        name.clone(),
+                        Transform::new()
+                            .position(start.x, 0.0, start.y)
+                            .rotation(0.0, 270.0, 0.0),
+                    ),
+                )
+            })
+            .collect();
 
         let cam = Camera::new(60.0, viewport);
 
@@ -44,13 +64,16 @@ impl MapToScene for Map {
             .iter()
             .map(|c| {
                 let points = c.shape.iter().map(|p| Point2::new(p.x, p.y)).collect();
-                log::info!("collider: {:?}", points);
                 Collider(Polyline::new(points, None))
             })
             .collect();
 
+        objects.push(Box::new(map));
+
         Scene {
+            own_id: params.client_id,
             player,
+            players,
             colliders,
             objects,
             cam,

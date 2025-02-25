@@ -68,11 +68,11 @@ impl Player {
             "KeyW" => self.acceleration.y = 0.4,
             "KeyS" => self.acceleration.y = -0.4,
             "KeyA" => {
-                self.acceleration.x = -40.0;
+                self.acceleration.x = -80.0;
                 self.velocity.x = self.velocity.x.min(10.0);
             }
             "KeyD" => {
-                self.acceleration.x = 40.0;
+                self.acceleration.x = 80.0;
                 self.velocity.x = self.velocity.x.max(-10.0);
             }
 
@@ -166,6 +166,10 @@ impl Object for Player {
         }
     }
 
+    fn transparency_depth(&self, cam: &Camera) -> Option<f32> {
+        Some(self.billboard.camera_depth(cam))
+    }
+
     fn render(&self, ctx: &RenderContext) {
         self.billboard.render(ctx);
     }
@@ -189,6 +193,68 @@ impl core::ops::DerefMut for Player {
 }
 
 impl AsRef<Transform> for Player {
+    fn as_ref(&self) -> &Transform {
+        &self.billboard
+    }
+}
+
+#[derive(Debug)]
+pub struct ExternalPlayer {
+    billboard: Billboard,
+    name: String,
+}
+
+impl ExternalPlayer {
+    pub fn new(gl: &glow::Context, name: String, transform: Transform) -> Self {
+        let sprite_sheet = SpriteSheet::load_multi(gl, "player");
+
+        let mut billboard = Billboard::new(gl, sprite_sheet);
+        billboard.pos = transform.pos;
+
+        billboard.rot = transform.rot;
+        billboard.rotation_offset = ROTATION_OFFSET;
+
+        billboard.scale_uniform(0.75);
+
+        Self { billboard, name }
+    }
+
+    pub fn update_state(&mut self, state: PlayerState) {
+        self.pos = Vec3::new(state.pos.x, 0.0, state.pos.y);
+        self.rot = Rotation::new(0.0, state.rot, 0.0);
+    }
+}
+
+impl Object for ExternalPlayer {
+    fn update(&mut self, _ctx: &mut UpdateContext) {}
+
+    fn transparency_depth(&self, cam: &Camera) -> Option<f32> {
+        Some(self.billboard.camera_depth(cam))
+    }
+
+    fn render(&self, ctx: &RenderContext) {
+        self.billboard.render(ctx);
+    }
+
+    fn cleanup(&self, gl: &glow::Context) {
+        self.billboard.cleanup(gl);
+    }
+}
+
+impl core::ops::Deref for ExternalPlayer {
+    type Target = Billboard;
+    fn deref(&self) -> &Self::Target {
+        &self.billboard
+    }
+}
+
+impl core::ops::DerefMut for ExternalPlayer {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.billboard
+    }
+}
+
+impl AsRef<Transform> for ExternalPlayer {
     fn as_ref(&self) -> &Transform {
         &self.billboard
     }

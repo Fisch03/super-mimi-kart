@@ -1,4 +1,4 @@
-use crate::engine::{RenderContext, UpdateContext};
+use crate::engine::{Camera, RenderContext, UpdateContext};
 use glow::*;
 
 use common::types::*;
@@ -8,6 +8,10 @@ where
     Self: AsRef<Transform> + core::fmt::Debug,
 {
     fn update(&mut self, _ctx: &mut UpdateContext) {}
+
+    fn transparency_depth(&self, _cam: &Camera) -> Option<f32> {
+        None
+    }
     fn render(&self, ctx: &RenderContext);
 
     // fn key_down(&mut self, _key: &str) {}

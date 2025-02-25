@@ -220,6 +220,7 @@ impl GameServer {
                     SendTo::Only(id),
                     ServerMessage::StartRound {
                         params: RoundInitParams {
+                            client_id: id,
                             start_pos: i,
                             players: start_positions.clone(),
                         },
@@ -302,7 +303,14 @@ impl GameServer {
     }
 
     pub fn allocate_client(&self) -> ClientId {
-        ClientId::new(self.next_client_id.fetch_add(1, Ordering::Relaxed))
+        // dont give out client id 0 since that is used as an invalid id
+        let id = loop {
+            let id = self.next_client_id.fetch_add(1, Ordering::Relaxed);
+            if id != 0 {
+                break id;
+            }
+        };
+        ClientId::new(id)
     }
 
     pub async fn register_client(
