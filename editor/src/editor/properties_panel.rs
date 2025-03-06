@@ -1,13 +1,13 @@
-use super::{map_view::Selection, Editor};
+use super::Editor;
 use common::map::AssetId;
-use egui::{vec2, Grid, Image, SliderClamping, TopBottomPanel};
+use egui::{vec2, Grid, Image, SliderClamping, TextureFilter, TextureOptions, TopBottomPanel};
 use egui_phosphor::bold;
 
 impl Editor {
     pub(super) fn show_properties(&mut self, ui: &mut egui::Ui) {
         ui.spacing_mut().item_spacing = egui::vec2(5.0, 5.0);
 
-        ui.strong("Metadata");
+        ui.heading("Metadata");
         Grid::new("metadata_grid").num_columns(2).show(ui, |ui| {
             ui.label("Name");
             ui.text_edit_singleline(&mut self.map.metadata.name);
@@ -24,7 +24,7 @@ impl Editor {
 
         ui.separator();
 
-        ui.strong("Track");
+        ui.heading("Track");
         Grid::new("track_grid").num_columns(2).show(ui, |ui| {
             ui.label("Start Offset H");
             ui.add(
@@ -46,42 +46,73 @@ impl Editor {
         ui.separator();
 
         ui.horizontal(|ui| {
-            ui.strong("Assets");
-            if ui.button(format!("{}", bold::PLUS)).clicked() {
-                self.upload_asset(format!("Asset {}", self.map.assets().len() + 1));
+            ui.heading("Assets");
+
+            if ui.button(format!("{} Upload Asset", bold::PLUS)).clicked() {
+                self.upload_asset();
             }
         });
+
         for i in 0..self.map.assets().len() {
             ui.push_id(i, |ui| {
                 let id = AssetId::new(i);
                 ui.horizontal(|ui| {
                     ui.add(
                         Image::new(format!("smk://asset/{}", id.as_usize()))
+                            .texture_options(TextureOptions {
+                                magnification: TextureFilter::Nearest,
+                                ..Default::default()
+                            })
                             .max_size(vec2(75.0, 75.0))
                             .fit_to_original_size(100.0),
                     );
 
-                    ui.vertical(|ui| {
+                    Grid::new("asset_options").num_columns(2).show(ui, |ui| {
+                        ui.label("Name");
                         self.map.asset_name_mut(id, |name| {
                             ui.text_edit_singleline(name);
                         });
+                        ui.end_row();
 
+                        ui.label("Usage");
                         ui.horizontal(|ui| {
-                            if ui
-                                .button(format!("{}", bold::IMAGE))
-                                .on_hover_text("Set as background")
-                                .clicked()
-                            {
-                                self.map.background = Some(AssetId::new(i));
+                            macro_rules! usage_btn {
+                                ($icon:expr, $usage:expr, $tooltip:expr) => {
+                                    let selected = $usage == Some(id);
+                                    if ui
+                                        .selectable_label(selected, format!("{}", $icon))
+                                        .on_hover_text($tooltip)
+                                        .clicked()
+                                    {
+                                        if selected {
+                                            $usage = None;
+                                        } else {
+                                            $usage = Some(id);
+                                        }
+                                    }
+                                };
                             }
-                            if ui
-                                .button(format!("{}", bold::TRASH))
-                                .on_hover_text("Remove asset")
-                                .clicked()
-                            {
-                                log::warn!("TODO: remove all references to asset {}", i);
-                            }
+
+                            usage_btn!(
+                                bold::IMAGE,
+                                self.map.background,
+                                "Set as background texture"
+                            );
+                            usage_btn!(bold::CUBE, self.map.item_box, "Set as item box texture");
+                            usage_btn!(bold::COINS, self.map.coin, "Set as coin texture");
                         });
+                        ui.end_row();
+
+                        ui.label("Actions");
+                        if ui
+                            .button(format!("{} Delete", bold::TRASH))
+                            .on_hover_text("Remove asset")
+                            .clicked()
+                        {
+                            self.map.remove_asset(id);
+                            self.asset_loader.load_map(&self.map);
+                            ui.ctx().forget_all_images();
+                        }
                     });
                 });
             });
@@ -96,7 +127,7 @@ impl Editor {
                 }
             });
 
-            ui.strong("Collider");
+            ui.heading("Collider");
             Grid::new("collider_grid").num_columns(2).show(ui, |ui| {});
         }
         */
@@ -111,7 +142,7 @@ impl Editor {
                     .fill(ui.style().visuals.window_fill()),
             )
             .show_inside(ui, |ui| {
-                ui.strong("View Settings");
+                ui.heading("View Settings");
                 ui.add_space(2.0);
                 self.view.show_view_settings(ui, &mut self.map);
             });

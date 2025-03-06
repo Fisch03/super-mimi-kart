@@ -114,7 +114,7 @@ pub struct AssetUpload {
 }
 
 impl AssetUpload {
-    pub fn start(name: String) -> Result<Self, wasm_bindgen::JsValue> {
+    pub fn start() -> Result<Self, wasm_bindgen::JsValue> {
         let window = web_sys::window().unwrap();
         let document = window.document().unwrap();
         let body = document.body().unwrap();
@@ -136,6 +136,7 @@ impl AssetUpload {
                 if let Some(file) = file {
                     let reader = FileReader::new().unwrap();
                     let reader_clone = reader.clone();
+                    let name = file.name();
                     let on_load = Closure::once(Box::new(move || {
                         let array_buffer = reader_clone
                             .result()

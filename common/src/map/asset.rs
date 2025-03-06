@@ -1,6 +1,7 @@
 use image::GenericImageView;
 use serde::{Deserialize, Serialize};
 use std::io::{Cursor, Read, Write};
+use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct AssetId(usize);
@@ -24,22 +25,12 @@ pub struct Asset {
 #[derive(Debug, Clone, Default)]
 pub struct MapAssets(Vec<Asset>);
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum AssetLoadError {
-    IoError(std::io::Error),
-    ImageError(image::ImageError),
-}
-
-impl From<std::io::Error> for AssetLoadError {
-    fn from(e: std::io::Error) -> Self {
-        Self::IoError(e)
-    }
-}
-
-impl From<image::ImageError> for AssetLoadError {
-    fn from(e: image::ImageError) -> Self {
-        Self::ImageError(e)
-    }
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
+    #[error("Image error: {0}")]
+    ImageError(#[from] image::ImageError),
 }
 
 impl Asset {
@@ -83,6 +74,13 @@ impl MapAssets {
         let id = AssetId(self.0.len());
         self.0.push(asset);
         id
+    }
+
+    pub fn remove(&mut self, id: AssetId) -> Option<Asset> {
+        if id.0 >= self.0.len() {
+            return None;
+        }
+        Some(self.0.remove(id.0))
     }
 
     pub fn get(&self, id: AssetId) -> Option<&Asset> {

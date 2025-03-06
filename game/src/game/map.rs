@@ -63,7 +63,12 @@ impl MapToScene for Map {
             .colliders
             .iter()
             .map(|c| {
-                let points = c.shape.iter().map(|p| Point2::new(p.x, p.y)).collect();
+                let points = c
+                    .shape
+                    .iter()
+                    .map(|p| Point2::new(p.x, p.y))
+                    .chain(std::iter::once(Point2::new(c.shape[0].x, c.shape[0].y)))
+                    .collect();
                 Collider(Polyline::new(points, None))
             })
             .collect();

@@ -17,9 +17,10 @@ egui_extras = { version = "0.30", features = ["http", "image"] }
 egui-phosphor = { version = "0.8.0", default-features = false, features = ["bold"] }
 js-sys = "0.3.77"
 poll-promise = { version = "0.3", features = ["web"] }
-indexed_db_futures = { version = "0.6.0", features = ["serde", "async-upgrade"] }
+indexed_db_futures = { version = "0.6.0", features = ["serde", "async-upgrade", "indices"] }
 serde = { version = "1.0", default-features = false, features = ["derive", "std"] }
 earcut = "0.4.2"
+thiserror = "2.0.12"
 
 [dependencies.web-sys]
 version = "0.3" 

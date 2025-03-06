@@ -1,8 +1,9 @@
-use common::map::Map;
+use common::map::{AssetId, Map};
 use common::types::*;
 use earcut::Earcut;
 use egui::{
-    epaint::{CircleShape, PathShape},
+    epaint::{CircleShape, PathShape, RectShape},
+    load::{SizedTexture, TexturePoll},
     pos2, vec2, Color32, Grid, Rect, Sense, Shape, Spinner, TextureFilter, TextureOptions, Window,
 };
 
@@ -16,6 +17,7 @@ pub struct View {
     zoom: f32,
     pan: egui::Pos2,
     selection: Selection,
+    tool: tools::Tool,
     dragging_selection: bool,
 
     start_viz_amt: usize,
@@ -26,9 +28,41 @@ impl Default for View {
         Self {
             zoom: 1.0,
             pan: egui::Pos2::ZERO,
+            tool: tools::Tool::Move,
             selection: Selection::None,
             dragging_selection: false,
             start_viz_amt: 10,
+        }
+    }
+}
+
+#[derive(Debug)]
+enum LoadError {
+    Pending,
+    LoadError,
+}
+
+fn load_asset(ui: &mut egui::Ui, id: Option<AssetId>) -> Result<SizedTexture, LoadError> {
+    let uri = id
+        .map(|id| format!("smk://asset/{}", id.as_usize()))
+        .unwrap_or_else(|| String::from("smk://asset/default"));
+
+    let res = ui.ctx().try_load_texture(
+        &uri,
+        TextureOptions {
+            magnification: TextureFilter::Nearest,
+            // minification: TextureFilter::Nearest,
+            ..Default::default()
+        },
+        Default::default(),
+    );
+
+    match res {
+        Ok(TexturePoll::Ready { texture }) => Ok(texture),
+        Ok(TexturePoll::Pending { .. }) => Err(LoadError::Pending),
+        Err(err) => {
+            log::error!("Failed to load asset {}: {}", uri, err);
+            return Err(LoadError::LoadError);
         }
     }
 }
@@ -46,26 +80,15 @@ impl View {
     pub fn show(&mut self, ui: &mut egui::Ui, map: &mut Map) {
         let (rect, res) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
 
-        // let tex_res = Image::new("https://files.cibo-online.net/xBVyOuvwP3u0.png")
-        //     .load_for_size(ui.ctx(), rect.size());
-        let texture_uri = map
-            .background
-            .map(|b| format!("smk://asset/{}", b.as_usize()))
-            .unwrap_or_else(|| String::from("smk://asset/default"));
-
-        let tex_res = ui.ctx().try_load_texture(
-            &texture_uri,
-            TextureOptions {
-                magnification: TextureFilter::Nearest,
-                minification: TextureFilter::Nearest,
-                ..Default::default()
-            },
-            egui::SizeHint::Size(rect.width() as u32, rect.height() as u32),
-        );
-
-        let texture_poll = match tex_res {
-            Ok(texture_poll) => texture_poll,
-            Err(err) => {
+        let bg_texture = match load_asset(ui, map.background) {
+            Ok(texture) => texture,
+            Err(LoadError::Pending) => {
+                Spinner::new()
+                    .paint_at(ui, Rect::from_center_size(rect.center(), vec2(50.0, 50.0)));
+                ui.ctx().request_repaint();
+                return;
+            }
+            Err(LoadError::LoadError) => {
                 ui.painter().text(
                     rect.center(),
                     egui::Align2::CENTER_CENTER,
@@ -73,19 +96,8 @@ impl View {
                     egui::FontId::proportional(32.0),
                     egui::Color32::RED,
                 );
-                log::error!("Failed to load map image '{}': {}", texture_uri, err);
                 return;
             }
-        };
-
-        let texture = match texture_poll {
-            egui::load::TexturePoll::Pending { .. } => {
-                Spinner::new()
-                    .paint_at(ui, Rect::from_center_size(rect.center(), vec2(50.0, 50.0)));
-                ui.ctx().request_repaint();
-                return;
-            }
-            egui::load::TexturePoll::Ready { texture } => texture,
         };
 
         if res.hovered() {
@@ -94,8 +106,8 @@ impl View {
                 let old_zoom = self.zoom;
                 self.zoom *= 1.0 + i.smooth_scroll_delta.y * 0.001;
 
-                let old_size = texture.size * old_zoom;
-                let new_size = texture.size * self.zoom;
+                let old_size = bg_texture.size * old_zoom;
+                let new_size = bg_texture.size * self.zoom;
                 let old_center = rect.center() - self.pan;
                 let new_center = old_center
                     + (old_size - new_size) * (zoom_target - old_center).to_vec2() / old_size;
@@ -104,14 +116,14 @@ impl View {
             })
         }
 
-        let zoomed_size = texture.size * self.zoom;
+        let zoomed_size = bg_texture.size * self.zoom;
         let image_center_screen = rect.center() - self.pan;
         let image_rect = Rect::from_center_size(
             pos2(image_center_screen.x, image_center_screen.y),
             zoomed_size,
         );
 
-        if res.drag_started() {
+        if res.drag_started() && ui.ctx().input(|i| !i.pointer.middle_down()) {
             if let Some(pos) = res.interact_pointer_pos() {
                 let pos = (pos - image_center_screen) / self.zoom;
 
@@ -128,7 +140,7 @@ impl View {
         }
 
         if res.dragged() {
-            if self.dragging_selection {
+            if self.dragging_selection && ui.ctx().input(|i| !i.pointer.middle_down()) {
                 let delta = res.drag_delta() / self.zoom;
                 self.selection.translate(map, Vec2::new(delta.x, delta.y));
             } else {
@@ -151,11 +163,14 @@ impl View {
             let click_pos = res.interact_pointer_pos().unwrap_or_default();
             let click_pos = (click_pos - image_center_screen) / self.zoom;
 
-            self.selection = self.try_select(Vec2::new(click_pos.x, click_pos.y), map);
+            if self.tool == tools::Tool::Move {
+                self.selection = self.try_select(Vec2::new(click_pos.x, click_pos.y), map);
+            }
+            self.use_tool(map, Vec2::new(click_pos.x, click_pos.y));
         }
 
         ui.painter().image(
-            texture.id,
+            bg_texture.id,
             image_rect,
             Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
             Color32::WHITE,
@@ -288,6 +303,38 @@ impl View {
 
         ui.painter().extend(circles);
 
+        for (i, item_box) in map.item_spawns.iter().enumerate() {
+            let item_box =
+                pos2(item_box.x.round(), item_box.y.round()) * self.zoom + image_center_screen;
+
+            ui.painter().add(Shape::Rect(RectShape::new(
+                Rect::from_center_size(item_box, vec2(15.0, 15.0)),
+                0.0,
+                Color32::ORANGE,
+                if self.selection == Selection::item_box(i) {
+                    (3.0, Color32::RED)
+                } else {
+                    (1.0, Color32::BLACK)
+                },
+            )));
+        }
+
+        for (i, coin) in map.coins.iter().enumerate() {
+            let coin =
+                pos2(coin.x.round() + 0.5, coin.y.round() + 0.5) * self.zoom + image_center_screen;
+
+            ui.painter().add(Shape::Circle(CircleShape {
+                center: coin,
+                radius: 6.0,
+                fill: Color32::YELLOW,
+                stroke: if self.selection == Selection::coin(i) {
+                    (3.0, Color32::RED).into()
+                } else {
+                    (1.0, Color32::BLACK).into()
+                },
+            }));
+        }
+
         if self.selection != Selection::None {
             Window::new(self.selection.to_string())
                 .id(egui::Id::new("selection"))
@@ -306,6 +353,18 @@ impl View {
 
     fn try_select(&mut self, pos: Vec2, map: &Map) -> Selection {
         let tolerance = 15.0 / self.zoom;
+
+        for (i, item_box) in map.item_spawns.iter().enumerate() {
+            if item_box.distance(pos) < tolerance {
+                return Selection::item_box(i);
+            }
+        }
+
+        for (i, coin) in map.coins.iter().enumerate() {
+            if coin.distance(pos) < tolerance {
+                return Selection::coin(i);
+            }
+        }
 
         for (i, (start, end)) in map
             .track

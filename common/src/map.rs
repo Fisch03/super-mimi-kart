@@ -6,6 +6,7 @@ use std::{
     path::Path,
 };
 use tar::{Archive, Builder};
+use thiserror::Error;
 
 mod track;
 pub use track::*;
@@ -16,32 +17,38 @@ pub use asset::*;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Map {
     pub metadata: Metadata,
+
+    #[serde(default)]
     pub background: Option<AssetId>,
+    #[serde(default)]
+    pub coin: Option<AssetId>,
+    #[serde(default)]
+    pub item_box: Option<AssetId>,
+
     pub track: Track,
+
+    #[serde(default)]
     pub colliders: Vec<Collider>,
+    #[serde(default)]
+    pub coins: Vec<Vec2>,
+    #[serde(default)]
+    pub item_spawns: Vec<Vec2>,
+
     pub asset_paths: HashMap<String, AssetId>,
     #[serde(skip)]
     assets: MapAssets,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum MapLoadError {
-    IoError(std::io::Error),
-    DeserializeError(serde_json::Error),
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
+    #[error("Invalid map data: {0}")]
+    DeserializeError(#[from] serde_json::Error),
+    #[error("Missing data")]
     MissingData,
-    MissingAsset((AssetId, String)),
-}
-
-impl From<serde_json::Error> for MapLoadError {
-    fn from(e: serde_json::Error) -> Self {
-        Self::DeserializeError(e)
-    }
-}
-
-impl From<std::io::Error> for MapLoadError {
-    fn from(e: std::io::Error) -> Self {
-        Self::IoError(e)
-    }
+    #[error("Missing asset: {1}")]
+    MissingAsset(AssetId, String),
 }
 
 #[derive(Debug)]
@@ -63,6 +70,43 @@ impl From<std::io::Error> for MapSaveError {
 }
 
 impl Map {
+    pub fn asset(&self, id: AssetId) -> Option<&Asset> {
+        self.assets.get(id)
+    }
+
+    pub fn add_asset(&mut self, asset: Asset) -> AssetId {
+        let name = asset.name.clone();
+        let id = self.assets.insert(asset);
+        self.asset_paths.insert(name, id);
+        id
+    }
+
+    pub fn remove_asset(&mut self, id: AssetId) -> Option<Asset> {
+        let asset = self.assets.remove(id);
+        if let Some(asset) = &asset {
+            self.asset_paths.remove(&asset.name);
+
+            if let Some(bg_id) = self.background {
+                if bg_id == id {
+                    self.background = None;
+                }
+                if bg_id.as_usize() > id.as_usize() {
+                    self.background = Some(AssetId::new(bg_id.as_usize() - 1));
+                }
+            }
+
+            if let Some(coin_id) = self.coin {
+                if coin_id == id {
+                    self.coin = None;
+                }
+                if coin_id.as_usize() > id.as_usize() {
+                    self.coin = Some(AssetId::new(coin_id.as_usize() - 1));
+                }
+            }
+        }
+        asset
+    }
+
     pub fn assets(&self) -> &MapAssets {
         &self.assets
     }
@@ -70,6 +114,8 @@ impl Map {
     pub fn round_all(&mut self) {
         self.track.round_all();
         self.colliders.iter_mut().for_each(|c| c.round_all());
+        self.coins.iter_mut().for_each(|p| *p = p.round());
+        self.item_spawns.iter_mut().for_each(|p| *p = p.round());
     }
 
     pub fn asset_name_mut(&mut self, id: AssetId, f: impl FnOnce(&mut String)) {
@@ -84,13 +130,6 @@ impl Map {
             self.asset_paths.remove(&current_name);
             self.asset_paths.insert(asset.name.clone(), id);
         }
-    }
-
-    pub fn add_asset(&mut self, asset: Asset) -> AssetId {
-        let name = asset.name.clone();
-        let id = self.assets.insert(asset);
-        self.asset_paths.insert(name, id);
-        id
     }
 
     pub fn load<R: Read + Seek>(mut map: R) -> Result<Self, MapLoadError> {
@@ -120,7 +159,7 @@ impl Map {
             if let Some(asset) = all_assets.remove(name) {
                 assets.push((*id, asset));
             } else {
-                return Err(MapLoadError::MissingAsset((*id, name.clone())));
+                return Err(MapLoadError::MissingAsset(*id, name.clone()));
             }
         }
 

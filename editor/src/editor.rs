@@ -13,7 +13,9 @@ pub struct Editor {
     map_upload: Option<map_io::MapUpload>,
     view: map_view::View,
     map_db: map_io::MapDB,
+
     last_save: f64,
+    full_save: bool,
 
     asset_loader: Arc<AssetLoader>,
     asset_uploads: Vec<AssetUpload>,
@@ -41,7 +43,9 @@ impl Editor {
             map_upload: None,
             map_db,
             view: map_view::View::default(),
+
             last_save: now(),
+            full_save: false,
 
             asset_loader,
             asset_uploads: Vec::new(),
@@ -65,8 +69,8 @@ impl Editor {
         self.view = map_view::View::default();
     }
 
-    fn upload_asset(&mut self, name: String) {
-        let upload = AssetUpload::start(name);
+    fn upload_asset(&mut self) {
+        let upload = AssetUpload::start();
         let upload = match upload {
             Ok(upload) => upload,
             Err(e) => {
@@ -85,6 +89,7 @@ impl eframe::App for Editor {
                 Some(Ok(map)) => {
                     self.replace_map(map);
                     self.map_upload = None;
+                    self.full_save = true;
                 }
                 Some(Err(e)) => {
                     log::error!("failed to load map: {:?}", e);
@@ -101,6 +106,7 @@ impl eframe::App for Editor {
                 Some(Ok(asset)) => {
                     self.map.add_asset(asset);
                     self.asset_loader.load_map(&self.map);
+                    self.full_save = true;
                 }
                 Some(Err(e)) => {
                     log::error!("failed to upload asset: {:?}", e);
@@ -144,7 +150,7 @@ impl eframe::App for Editor {
             .resizable(false)
             .frame(
                 egui::Frame::default()
-                    .inner_margin(egui::Margin::same(10.0))
+                    .inner_margin(egui::Margin::same(8.0))
                     .fill(ctx.style().visuals.window_fill()),
             )
             .show(ctx, |ui| {
@@ -167,13 +173,24 @@ impl eframe::App for Editor {
                 self.view.show(ui, &mut self.map);
             });
 
-        if self.last_save + 5000.0 < now() {
+        if self.last_save + 5000.0 < now() || self.full_save {
             self.last_save = now();
             let db = self.map_db.clone();
             let map = self.map.clone();
+
+            let full_save = self.full_save;
+            self.full_save = false;
+
             Promise::spawn_local(async move {
-                log::debug!("saving map");
-                match db.save(map).await {
+                let save_op = if full_save {
+                    log::debug!("saving map with assets");
+                    db.save_with_assets(map).await
+                } else {
+                    log::debug!("saving map");
+                    db.save(map).await
+                };
+
+                match save_op {
                     Ok(_) => log::debug!("map saved"),
                     Err(e) => log::error!("failed to save map: {:?}", e),
                 }

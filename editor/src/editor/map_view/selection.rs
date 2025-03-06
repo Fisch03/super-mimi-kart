@@ -5,10 +5,19 @@ mod collider;
 pub use collider::*;
 mod track;
 pub use track::*;
+mod coin;
+use coin::*;
+mod item_box;
+use item_box::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Selection {
     None,
+
+    Coin(Coin),
+
+    ItemBox(ItemBox),
+
     TrackPoint(TrackPoint),
     TrackSegment(TrackSegment),
 
@@ -26,6 +35,8 @@ pub enum GeometryType {
 
 pub enum ObjectType {
     None,
+    Coin,
+    ItemBox,
     Track,
     Collider,
 }
@@ -66,6 +77,10 @@ impl core::fmt::Display for Selection {
         match self {
             Selection::None => write!(f, "None"),
 
+            Selection::Coin(_) => write!(f, "Coin"),
+
+            Selection::ItemBox(_) => write!(f, "Item Box"),
+
             Selection::TrackPoint(_) => write!(f, "Track Point"),
             Selection::TrackSegment(_) => write!(f, "Track Segment"),
 
@@ -92,8 +107,14 @@ impl Selection {
     pub fn translate(&self, map: &mut Map, delta: Vec2) {
         match self {
             Selection::None => {}
+
+            Self::Coin(i) => i.translate(map, delta),
+
+            Selection::ItemBox(i) => i.translate(map, delta),
+
             Selection::TrackPoint(i) => i.translate(map, delta),
             Selection::TrackSegment(i) => i.translate(map, delta),
+
             Selection::Collider(i) => i.translate(map, delta),
             Selection::ColliderPoint(i) => i.translate(map, delta),
             Selection::ColliderSegment(i) => i.translate(map, delta),
@@ -105,8 +126,14 @@ impl Selection {
             .num_columns(2)
             .show(ui, |ui| match self {
                 Selection::None => {}
+
+                Selection::Coin(i) => i.edit_ui(map, ui),
+
+                Selection::ItemBox(i) => i.edit_ui(map, ui),
+
                 Selection::TrackPoint(i) => i.edit_ui(map, ui),
                 Selection::TrackSegment(i) => i.edit_ui(map, ui),
+
                 Selection::Collider(i) => i.edit_ui(map, ui),
                 Selection::ColliderPoint(i) => i.edit_ui(map, ui),
                 Selection::ColliderSegment(i) => i.edit_ui(map, ui),
