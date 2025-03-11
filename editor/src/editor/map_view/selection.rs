@@ -3,6 +3,8 @@ use egui::Grid;
 
 mod collider;
 pub use collider::*;
+mod offroad;
+pub use offroad::*;
 mod track;
 pub use track::*;
 mod coin;
@@ -24,21 +26,10 @@ pub enum Selection {
     Collider(Collider),
     ColliderPoint(ColliderPoint),
     ColliderSegment(ColliderSegment),
-}
 
-pub enum GeometryType {
-    None,
-    Polygon,
-    Segment,
-    Point,
-}
-
-pub enum ObjectType {
-    None,
-    Coin,
-    ItemBox,
-    Track,
-    Collider,
+    Offroad(Offroad),
+    OffroadPoint(OffroadPoint),
+    OffroadSegment(OffroadSegment),
 }
 
 fn edit_point(ui: &mut egui::Ui, point: &mut Vec2) {
@@ -52,9 +43,6 @@ fn edit_point(ui: &mut egui::Ui, point: &mut Vec2) {
 }
 
 pub trait Select {
-    fn geometry_type(&self) -> GeometryType;
-    fn object_type(&self) -> ObjectType;
-
     // fn select<'a>(&self, map: &'a Map) -> &'a Self::Result;
     // fn select_mut<F>(&self, map: &'a mut Map, f: F)
     // where
@@ -66,14 +54,19 @@ pub trait Select {
     fn edit_ui<'a>(&self, map: &'a mut Map, ui: &mut egui::Ui) {}
 }
 
+pub trait PointSelect: Select {
+    fn point(&self, map: &Map) -> Vec2;
+    fn set_point(&self, map: &mut Map, point: Vec2);
+}
+
 pub trait SegmentSelect: Select {
     fn segment(&self, map: &Map) -> Segment;
     fn set_segment(&self, map: &mut Map, segment: Segment);
     fn insert_point(&self, map: &mut Map, pos: Vec2);
 }
 
-impl core::fmt::Display for Selection {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl std::fmt::Display for Selection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Selection::None => write!(f, "None"),
 
@@ -87,6 +80,10 @@ impl core::fmt::Display for Selection {
             Selection::Collider(_) => write!(f, "Collider"),
             Selection::ColliderPoint(_) => write!(f, "Collider Point"),
             Selection::ColliderSegment(_) => write!(f, "Collider Segment"),
+
+            Selection::Offroad(_) => write!(f, "Offroad"),
+            Selection::OffroadPoint(_) => write!(f, "Offroad Point"),
+            Selection::OffroadSegment(_) => write!(f, "Offroad Segment"),
         }
     }
 }
@@ -96,10 +93,20 @@ impl Selection {
         self.as_segment().is_some()
     }
 
+    pub fn as_point(&self) -> Option<&dyn PointSelect> {
+        match self {
+            Selection::TrackPoint(p) => Some(p),
+            Selection::ColliderPoint(p) => Some(p),
+            Selection::OffroadPoint(p) => Some(p),
+            _ => None,
+        }
+    }
+
     pub fn as_segment(&self) -> Option<&dyn SegmentSelect> {
         match self {
             Selection::TrackSegment(s) => Some(s),
             Selection::ColliderSegment(s) => Some(s),
+            Selection::OffroadSegment(s) => Some(s),
             _ => None,
         }
     }
@@ -118,6 +125,10 @@ impl Selection {
             Selection::Collider(i) => i.translate(map, delta),
             Selection::ColliderPoint(i) => i.translate(map, delta),
             Selection::ColliderSegment(i) => i.translate(map, delta),
+
+            Selection::Offroad(i) => i.translate(map, delta),
+            Selection::OffroadPoint(i) => i.translate(map, delta),
+            Selection::OffroadSegment(i) => i.translate(map, delta),
         }
     }
 
@@ -137,6 +148,10 @@ impl Selection {
                 Selection::Collider(i) => i.edit_ui(map, ui),
                 Selection::ColliderPoint(i) => i.edit_ui(map, ui),
                 Selection::ColliderSegment(i) => i.edit_ui(map, ui),
+
+                Selection::Offroad(i) => i.edit_ui(map, ui),
+                Selection::OffroadPoint(i) => i.edit_ui(map, ui),
+                Selection::OffroadSegment(i) => i.edit_ui(map, ui),
             });
     }
 }

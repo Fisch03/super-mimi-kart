@@ -18,11 +18,6 @@ impl Shaders {
             billboard: unlit::BillboardShader::new(gl),
         }
     }
-
-    pub fn cleanup(&self, gl: &Context) {
-        self.unlit.cleanup(gl);
-        self.billboard.cleanup(gl);
-    }
 }
 
 fn load(gl: &Context, name: &str) -> Program {

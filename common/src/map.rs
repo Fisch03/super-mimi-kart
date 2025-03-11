@@ -30,6 +30,8 @@ pub struct Map {
     #[serde(default)]
     pub colliders: Vec<Collider>,
     #[serde(default)]
+    pub offroad: Vec<Offroad>,
+    #[serde(default)]
     pub coins: Vec<Vec2>,
     #[serde(default)]
     pub item_spawns: Vec<Vec2>,
@@ -204,6 +206,8 @@ impl Default for Metadata {
     }
 }
 
+pub type Offroad = Collider;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Collider {
     pub shape: Vec<Vec2>,
@@ -232,14 +236,14 @@ impl Collider {
     }
 }
 
-impl core::ops::Deref for Collider {
+impl std::ops::Deref for Collider {
     type Target = Vec<Vec2>;
     fn deref(&self) -> &Self::Target {
         &self.shape
     }
 }
 
-impl core::ops::DerefMut for Collider {
+impl std::ops::DerefMut for Collider {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.shape
     }

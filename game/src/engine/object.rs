@@ -5,7 +5,7 @@ use common::types::*;
 
 pub trait Object
 where
-    Self: AsRef<Transform> + core::fmt::Debug,
+    Self: AsRef<Transform> + std::fmt::Debug,
 {
     fn update(&mut self, _ctx: &mut UpdateContext) {}
 
@@ -16,8 +16,6 @@ where
 
     // fn key_down(&mut self, _key: &str) {}
     // fn key_up(&mut self, _key: &str) {}
-
-    fn cleanup(&self, gl: &Context);
 
     fn check_collision(&self, _player: Rect) -> Option<Collision> {
         None
@@ -72,6 +70,11 @@ impl Transform {
         let rot = Quat::from_axis_angle(axis, angle.to_radians());
         self.pos = rot * (self.pos - point) + point;
         self.rot.y -= angle;
+    }
+
+    pub fn camera_depth(&self, cam: &Camera) -> f32 {
+        let to_cam = cam.transform.pos - self.pos;
+        to_cam.length_squared()
     }
 
     pub fn model_mat(&self) -> Mat4 {

@@ -1,4 +1,4 @@
-use super::{edit_point, GeometryType, ObjectType, SegmentSelect, Select, Selection};
+use super::{edit_point, Select, Selection};
 use common::{map::Map, types::*};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -10,14 +10,6 @@ impl Selection {
 }
 
 impl Select for Coin {
-    fn geometry_type(&self) -> GeometryType {
-        GeometryType::Point
-    }
-
-    fn object_type(&self) -> ObjectType {
-        ObjectType::Coin
-    }
-
     fn translate(&self, map: &mut Map, delta: Vec2) {
         map.coins[self.0] += delta;
     }

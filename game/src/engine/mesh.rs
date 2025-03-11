@@ -1,6 +1,10 @@
 use glow::*;
 
-use crate::engine::sprite::{SpriteSheet, SpriteSheetUniforms};
+use crate::engine::{
+    CreateContext, RenderContext,
+    cache::SheetRef,
+    sprite::{SpriteSheet, SpriteSheetUniforms},
+};
 
 #[derive(bytemuck::Pod, bytemuck::Zeroable, Clone, Copy)]
 #[repr(C)]
@@ -31,29 +35,36 @@ pub struct Mesh {
     vert_buffer: Buffer,
     vert_array: VertexArray,
     index_buffer: Buffer,
-    pub sprite_sheet: SpriteSheet,
+    pub sprite_ref: SheetRef,
 }
 
 impl Mesh {
-    pub fn new(gl: &Context, data: MeshData, sprite_sheet: SpriteSheet) -> Self {
-        let transformed_verts = data.transfom_uv_to_sheet(&sprite_sheet);
+    pub fn new(ctx: &CreateContext, data: MeshData, sprite_ref: SheetRef) -> Self {
+        let transformed_verts = data.transfom_uv_to_sheet(&sprite_ref.get());
 
         let (vert_array, vert_buffer, index_buffer) = unsafe {
-            let vert_array = gl.create_vertex_array().unwrap();
-            let vert_buffer = gl.create_buffer().unwrap();
+            let vert_array = ctx.gl.create_vertex_array().unwrap();
+            let vert_buffer = ctx.gl.create_buffer().unwrap();
 
-            gl.bind_vertex_array(Some(vert_array));
+            ctx.gl.bind_vertex_array(Some(vert_array));
 
-            gl.bind_buffer(glow::ARRAY_BUFFER, Some(vert_buffer));
-            gl.buffer_data_u8_slice(
+            ctx.gl.bind_buffer(glow::ARRAY_BUFFER, Some(vert_buffer));
+            ctx.gl.buffer_data_u8_slice(
                 glow::ARRAY_BUFFER,
                 bytemuck::cast_slice(&transformed_verts),
                 glow::STATIC_DRAW,
             );
 
-            gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, size_of::<MeshVert>() as i32, 0);
-            gl.enable_vertex_attrib_array(0);
-            gl.vertex_attrib_pointer_f32(
+            ctx.gl.vertex_attrib_pointer_f32(
+                0,
+                3,
+                glow::FLOAT,
+                false,
+                size_of::<MeshVert>() as i32,
+                0,
+            );
+            ctx.gl.enable_vertex_attrib_array(0);
+            ctx.gl.vertex_attrib_pointer_f32(
                 1,
                 2,
                 glow::FLOAT,
@@ -61,11 +72,12 @@ impl Mesh {
                 size_of::<MeshVert>() as i32,
                 3 * size_of::<f32>() as i32,
             );
-            gl.enable_vertex_attrib_array(1);
+            ctx.gl.enable_vertex_attrib_array(1);
 
-            let index_buffer = gl.create_buffer().unwrap();
-            gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(index_buffer));
-            gl.buffer_data_u8_slice(
+            let index_buffer = ctx.gl.create_buffer().unwrap();
+            ctx.gl
+                .bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(index_buffer));
+            ctx.gl.buffer_data_u8_slice(
                 glow::ELEMENT_ARRAY_BUFFER,
                 bytemuck::cast_slice(&data.indices),
                 glow::STATIC_DRAW,
@@ -78,7 +90,7 @@ impl Mesh {
             vert_buffer,
             vert_array,
             index_buffer,
-            sprite_sheet,
+            sprite_ref,
         }
     }
 
@@ -90,34 +102,26 @@ impl Mesh {
         }
     }
 
-    pub fn bind(&self, gl: &Context, sprite_sheet_uniforms: &SpriteSheetUniforms) {
-        self.bind_common(gl);
-        self.sprite_sheet.bind(gl, sprite_sheet_uniforms);
+    pub fn bind(&self, ctx: &RenderContext, sprite_sheet_uniforms: &SpriteSheetUniforms) {
+        self.bind_common(ctx.gl);
+        self.sprite_ref.get().bind(ctx.gl, sprite_sheet_uniforms);
     }
 
     pub fn bind_index(
         &self,
-        gl: &Context,
+        ctx: &RenderContext,
         sprite_sheet_uniforms: &SpriteSheetUniforms,
         index: u32,
     ) {
-        self.bind_common(gl);
-        self.sprite_sheet
-            .bind_index(gl, sprite_sheet_uniforms, index);
-    }
-
-    pub fn cleanup(&self, gl: &Context) {
-        unsafe {
-            gl.delete_vertex_array(self.vert_array);
-            gl.delete_buffer(self.vert_buffer);
-            gl.delete_buffer(self.index_buffer);
-            self.sprite_sheet.cleanup(gl);
-        }
+        self.bind_common(ctx.gl);
+        self.sprite_ref
+            .get()
+            .bind_index(ctx.gl, sprite_sheet_uniforms, index);
     }
 }
 
-impl core::fmt::Debug for Mesh {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl std::fmt::Debug for Mesh {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Mesh").finish()
     }
 }

@@ -1,13 +1,15 @@
-use common::{map::Map, types::*, ClientId, ClientMessage, ServerMessage};
+use common::{ClientId, ClientMessage, ServerMessage, map::Map, types::*};
 use glow::*;
 use std::collections::HashMap;
 use std::sync::mpsc;
 use web_sys::WebSocket;
 
-use crate::engine::{object::Object, Camera, RenderContext, Shaders, UpdateContext};
+use crate::engine::{
+    Camera, CreateContext, RenderContext, Shaders, UpdateContext, cache::AssetCache, object::Object,
+};
 
 mod map;
-pub use map::Collider;
+pub use map::{Collider, Offroad};
 use map::{MapDownload, MapToScene};
 pub mod objects;
 
@@ -25,8 +27,13 @@ struct Scene {
     own_id: ClientId,
     player: objects::Player,
     players: HashMap<ClientId, objects::ExternalPlayer>,
+
     colliders: Vec<Collider>,
-    objects: Vec<Box<dyn Object>>,
+    offroad: Vec<Offroad>,
+
+    coins: Vec<objects::Coin>,
+
+    static_objects: Vec<Box<dyn Object>>,
     map_dimensions: Vec2,
 }
 
@@ -48,6 +55,7 @@ pub struct Game {
     shaders: Shaders,
     viewport: Vec2,
 
+    cache: AssetCache,
     state: State,
 }
 
@@ -73,6 +81,7 @@ impl Game {
             ws,
             ws_rx,
             gl,
+            cache: Default::default(),
             shaders,
             viewport,
 
@@ -142,7 +151,13 @@ impl Game {
                         State::WaitingToStart { map } => map.clone(),
                         _ => unreachable!(),
                     };
-                    let scene = map.to_scene(&self.gl, self.viewport, &params);
+
+                    self.cache.clear();
+                    let ctx = CreateContext {
+                        gl: &self.gl,
+                        assets: &self.cache,
+                    };
+                    let scene = map.to_scene(&ctx, self.viewport, &params);
                     self.state = State::Running { map, scene };
                 }
 
@@ -170,7 +185,7 @@ impl Game {
                 let mut ctx = UpdateContext {
                     dt,
                     tick,
-                    colliders: &scene.colliders,
+                    assets: &self.cache,
                     send_msg: &mut |msg| {
                         let bytes = msg.to_bytes().unwrap();
                         match self.ws.send_with_u8_array(&bytes) {
@@ -178,13 +193,20 @@ impl Game {
                             Err(err) => log::error!("Error sending message: {:?}", err),
                         }
                     },
+
+                    colliders: &scene.colliders,
+                    offroad: &scene.offroad,
                 };
 
-                scene.objects.iter_mut().for_each(|o| o.update(&mut ctx));
+                scene
+                    .static_objects
+                    .iter_mut()
+                    .for_each(|o| o.update(&mut ctx));
                 scene
                     .players
                     .iter_mut()
                     .for_each(|(_, p)| p.update(&mut ctx));
+                scene.coins.iter_mut().for_each(|c| c.update(&mut ctx));
 
                 scene.player.update(&mut ctx);
                 scene.player.update_cam(&mut scene.cam);
@@ -222,24 +244,22 @@ impl Game {
             State::Running { scene, .. } => {
                 let ctx = RenderContext {
                     gl: &self.gl,
+                    assets: &self.cache,
+
                     shaders: &self.shaders,
                     cam: &scene.cam,
                 };
 
                 let mut depth_objects: Vec<(&dyn Object, f32)> = scene
-                    .objects
+                    .static_objects
                     .iter()
                     .map(|o| o.as_ref() as &dyn Object)
                     .chain(scene.players.values().map(|o| o as &dyn Object))
                     .chain(std::iter::once(&scene.player as &dyn Object))
-                    .filter_map(|o| {
-                        if let Some(depth) = o.transparency_depth(&ctx.cam) {
-                            Some((o, depth))
-                        } else {
-                            // render non-transparent objects immediately
-                            o.render(&ctx);
-                            None
-                        }
+                    .chain(scene.coins.iter().map(|o| o as &dyn Object))
+                    .map(|o| {
+                        let depth = o.as_ref().camera_depth(&scene.cam);
+                        (o, depth)
                     })
                     .collect();
 
@@ -257,15 +277,6 @@ impl Game {
 impl Drop for Game {
     fn drop(&mut self) {
         self.ws.close().unwrap();
-        self.shaders.cleanup(&self.gl);
-
-        match &mut self.state {
-            State::Running { scene, .. } => {
-                scene.player.cleanup(&self.gl);
-                scene.objects.iter_mut().for_each(|o| o.cleanup(&self.gl));
-            }
-            _ => {}
-        }
     }
 }
 

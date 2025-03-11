@@ -1,10 +1,10 @@
 use super::load;
 use crate::engine::{
+    RenderContext,
     cam::CameraUniforms,
     mesh::Mesh,
     object::Object,
     sprite::{Billboard, SpriteSheetUniforms},
-    RenderContext,
 };
 use glow::*;
 
@@ -34,12 +34,6 @@ impl UnlitShader {
         }
     }
 
-    pub(super) fn cleanup(&self, gl: &Context) {
-        unsafe {
-            gl.delete_program(self.program);
-        }
-    }
-
     pub fn render(&self, ctx: &RenderContext, obj: &dyn Object, mesh: &Mesh) {
         let obj_transform = obj.as_ref();
         unsafe {
@@ -55,7 +49,7 @@ impl UnlitShader {
 }
 
 impl std::fmt::Debug for UnlitShader {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> core::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("UnlitShader").finish()
     }
 }
@@ -86,12 +80,6 @@ impl BillboardShader {
         }
     }
 
-    pub(super) fn cleanup(&self, gl: &Context) {
-        unsafe {
-            gl.delete_program(self.program);
-        }
-    }
-
     pub fn render(&self, ctx: &RenderContext, obj: &Billboard) {
         unsafe {
             ctx.use_program(Some(self.program));
@@ -105,7 +93,7 @@ impl BillboardShader {
 }
 
 impl std::fmt::Debug for BillboardShader {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> core::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("BillboardShader").finish()
     }
 }

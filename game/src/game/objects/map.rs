@@ -1,11 +1,11 @@
 use crate::engine::{
+    CreateContext, RenderContext,
+    cache::MeshRef,
     mesh::Mesh,
     object::{Object, Transform},
-    sprite::{SpriteSheet, SPRITE_QUAD},
-    RenderContext,
+    sprite::{SPRITE_QUAD, SpriteSheet},
 };
 use common::types::*;
-use glow::*;
 use image::DynamicImage;
 
 pub const MAP_SCALE: f32 = 20.0;
@@ -21,15 +21,21 @@ pub fn world_coord_to_map(pos: Vec2) -> Vec2 {
 #[derive(Debug)]
 pub struct Map {
     transform: Transform,
-    mesh: Mesh,
+    mesh: MeshRef,
     dimensions: Vec2,
 }
 
 impl Map {
-    pub fn new(gl: &Context, texture: &DynamicImage) -> Self {
-        let sheet = SpriteSheet::from_images(gl, &[texture]);
+    pub fn new(ctx: &CreateContext, texture: &DynamicImage) -> Self {
+        let sheet = ctx
+            .assets
+            .load_sheet("map", || SpriteSheet::from_images(ctx.gl, &[texture]));
 
-        let dimensions = sheet.sprite_dimensions();
+        let mesh = ctx
+            .assets
+            .load_mesh("map", || Mesh::new(ctx, SPRITE_QUAD, sheet.clone()));
+
+        let dimensions = sheet.get().sprite_dimensions();
         let dimensions = Vec2::new(dimensions.x as f32, dimensions.y as f32) / MAP_SCALE;
         // let aspect = dimensions.x / dimensions.y;
 
@@ -39,7 +45,7 @@ impl Map {
 
         Self {
             transform,
-            mesh: Mesh::new(gl, SPRITE_QUAD, sheet),
+            mesh,
             dimensions,
         }
     }
@@ -55,11 +61,7 @@ impl Map {
 
 impl Object for Map {
     fn render(&self, ctx: &RenderContext) {
-        ctx.shaders.unlit.render(ctx, self, &self.mesh);
-    }
-
-    fn cleanup(&self, gl: &Context) {
-        self.mesh.cleanup(gl);
+        ctx.shaders.unlit.render(ctx, self, &self.mesh.get());
     }
 }
 

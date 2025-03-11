@@ -1,8 +1,9 @@
 use crate::engine::{
+    Camera, CreateContext, RenderContext,
+    cache::*,
     mesh::Mesh,
     object::Transform,
-    sprite::{SpriteSheet, SpriteSheetUniforms, SPRITE_QUAD},
-    Camera, RenderContext,
+    sprite::{SPRITE_QUAD, SpriteSheetUniforms},
 };
 use common::types::*;
 use glow::*;
@@ -10,26 +11,28 @@ use glow::*;
 #[derive(Debug)]
 pub struct Billboard {
     pub transform: Transform,
-    mesh: Mesh,
+    mesh: MeshRef,
     pub rotation_offset: f32,
 }
 
 impl Billboard {
-    pub fn new(gl: &Context, sheet: SpriteSheet) -> Self {
-        let aspect = sheet.sprite_dimensions().x as f32 / sheet.sprite_dimensions().y as f32;
+    pub fn new(ctx: &CreateContext, name: &str, sheet_ref: SheetRef) -> Self {
+        let aspect = {
+            let sheet = sheet_ref.get();
+            sheet.sprite_dimensions().x as f32 / sheet.sprite_dimensions().y as f32
+        };
 
         let transform = Transform::new().scale(1.0, 1.0, 1.0 / aspect);
 
+        let mesh = ctx
+            .assets
+            .load_mesh(name, || Mesh::new(ctx, SPRITE_QUAD, sheet_ref));
+
         Self {
             transform,
-            mesh: Mesh::new(gl, SPRITE_QUAD, sheet),
+            mesh,
             rotation_offset: 0.0,
         }
-    }
-
-    pub fn camera_depth(&self, cam: &Camera) -> f32 {
-        let to_cam = cam.transform.pos - self.transform.pos;
-        to_cam.length_squared()
     }
 
     pub fn render(&self, ctx: &RenderContext) {
@@ -58,7 +61,9 @@ impl Billboard {
             + self.rot.y.to_radians())
             % (std::f32::consts::PI * 2.0);
 
-        let sprite_amt = self.mesh.sprite_sheet.sprite_amount();
+        let mesh = self.mesh.get();
+
+        let sprite_amt = mesh.sprite_ref.get().sprite_amount();
         let sprite_index =
             (angle / (std::f32::consts::PI * 2.0) * sprite_amt as f32).round() as i32 / 2
                 % sprite_amt as i32;
@@ -66,8 +71,7 @@ impl Billboard {
             .max(0)
             .min(sprite_amt as i32 - 1);
 
-        self.mesh
-            .bind_index(ctx, sprite_sheet_uniforms, sprite_index as u32);
+        mesh.bind_index(ctx, sprite_sheet_uniforms, sprite_index as u32);
 
         // self.mesh.bind(ctx, sprite_sheet_uniforms);
 
@@ -79,20 +83,22 @@ impl Billboard {
             )
         };
     }
+}
 
-    pub fn cleanup(&self, gl: &glow::Context) {
-        self.mesh.cleanup(gl);
+impl AsRef<Transform> for Billboard {
+    fn as_ref(&self) -> &Transform {
+        &self.transform
     }
 }
 
-impl core::ops::Deref for Billboard {
+impl std::ops::Deref for Billboard {
     type Target = Transform;
     fn deref(&self) -> &Self::Target {
         &self.transform
     }
 }
 
-impl core::ops::DerefMut for Billboard {
+impl std::ops::DerefMut for Billboard {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.transform
     }

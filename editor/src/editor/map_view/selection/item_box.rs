@@ -1,4 +1,4 @@
-use super::{edit_point, GeometryType, ObjectType, SegmentSelect, Select, Selection};
+use super::{edit_point, Select, Selection};
 use common::{map::Map, types::*};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -10,14 +10,6 @@ impl Selection {
 }
 
 impl Select for ItemBox {
-    fn geometry_type(&self) -> GeometryType {
-        GeometryType::Point
-    }
-
-    fn object_type(&self) -> ObjectType {
-        ObjectType::ItemBox
-    }
-
     fn translate(&self, map: &mut Map, delta: Vec2) {
         map.item_spawns[self.0] += delta;
     }

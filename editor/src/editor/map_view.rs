@@ -1,4 +1,4 @@
-use common::map::{AssetId, Map};
+use common::map::{AssetId, Collider, Map};
 use common::types::*;
 use earcut::Earcut;
 use egui::{
@@ -8,7 +8,7 @@ use egui::{
 };
 
 pub mod selection;
-pub use selection::{SegmentSelect, Select, Selection};
+pub use selection::{PointSelect, SegmentSelect, Select, Selection};
 // mod selection_window;
 mod tools;
 mod view_settings;
@@ -182,73 +182,48 @@ impl View {
         }
 
         let mut circles = Vec::with_capacity(map.track.path.len() + map.colliders.len() * 4);
-        let mut earcut = Earcut::new();
-        map.colliders
-            .iter()
-            .enumerate()
-            .for_each(|(c_i, collider)| {
-                let mut tris: Vec<usize> = Vec::new();
-                //TODO: only do this when colliders are changed
-                earcut.earcut(collider.shape.iter().map(|p| [p.x, p.y]), &[], &mut tris);
-                for tri in tris.chunks(3) {
-                    ui.painter().add(Shape::convex_polygon(
-                        tri.iter()
-                            .map(|&i| {
-                                let p = collider.shape[i];
-                                pos2(p.x, p.y).round() * self.zoom + image_center_screen
-                            })
-                            .collect(),
-                        Color32::from_rgba_premultiplied(255, 0, 0, 50),
-                        egui::Stroke::NONE,
-                    ));
-                }
-
-                let outline = Shape::Path(PathShape::convex_polygon(
-                    collider
-                        .shape
-                        .iter()
-                        .enumerate()
-                        .map(|(p_i, p)| {
-                            let p = pos2(p.x, p.y).round() * self.zoom + image_center_screen;
-
-                            let color = if self.selection == Selection::collider_point(c_i, p_i) {
-                                Color32::RED
-                            } else {
-                                Color32::WHITE
-                            };
-
-                            circles.push(Shape::Circle(CircleShape {
-                                center: p,
-                                radius: 5.0,
-                                fill: color,
-                                stroke: (1.0, Color32::BLACK).into(),
-                            }));
-
-                            p
-                        })
-                        .collect(),
-                    Color32::from_rgba_premultiplied(0, 0, 0, 0),
-                    (1.0, Color32::BLACK),
-                ));
-
-                ui.painter().add(outline);
-
+        map.offroad.iter().enumerate().for_each(|offroad| {
+            self.triangulate(
+                offroad,
+                ui,
+                map,
+                Color32::from_rgba_premultiplied(50, 50, 0, 30),
+                image_center_screen,
+                &mut circles,
                 match self.selection {
-                    Selection::ColliderSegment(s) if s.collider.0 == c_i => {
-                        let segment = s.segment(map);
-                        let p_1 = pos2(segment.start.x, segment.start.y).round() * self.zoom
-                            + image_center_screen;
-                        let p_2 = pos2(segment.end.x, segment.end.y).round() * self.zoom
-                            + image_center_screen;
-
-                        ui.painter().add(Shape::LineSegment {
-                            points: [p_1, p_2],
-                            stroke: (3.0, Color32::RED).into(),
-                        });
+                    Selection::OffroadSegment(s) if s.offroad.0 == offroad.0 => {
+                        Some(s.segment(map))
                     }
-                    _ => {}
-                }
-            });
+                    _ => None,
+                },
+                match self.selection {
+                    Selection::OffroadPoint(p) if p.offroad.0 == offroad.0 => Some(p.point(map)),
+                    _ => None,
+                },
+            );
+        });
+
+        map.colliders.iter().enumerate().for_each(|collider| {
+            self.triangulate(
+                collider,
+                ui,
+                map,
+                Color32::from_rgba_premultiplied(255, 0, 0, 100),
+                image_center_screen,
+                &mut circles,
+                match self.selection {
+                    Selection::ColliderSegment(s) if s.collider.0 == collider.0 => {
+                        Some(s.segment(map))
+                    }
+
+                    _ => None,
+                },
+                match self.selection {
+                    Selection::ColliderPoint(p) if p.collider.0 == collider.0 => Some(p.point(map)),
+                    _ => None,
+                },
+            );
+        });
 
         map.track
             .path
@@ -389,7 +364,7 @@ impl View {
             if end_dist < tolerance && end_dist < segment_dist + tolerance * 5.0 {
                 return Selection::track_point((i + 1) % map.track.path.len());
             }
-            if segment_dist < tolerance {
+            if segment_dist < tolerance / 2.0 {
                 return Selection::track_segment(i);
             }
         }
@@ -417,12 +392,115 @@ impl View {
                 if end_dist < tolerance && end_dist < segment_dist + tolerance * 5.0 {
                     return Selection::collider_point(c_i, (p_i + 1) % collider.shape.len());
                 }
-                if segment_dist < tolerance {
+                if segment_dist < tolerance / 2.0 {
                     return Selection::collider_segment(c_i, p_i);
                 }
             }
         }
 
+        for (o_i, offroad) in map.offroad.iter().enumerate() {
+            for (p_i, (start, end)) in offroad
+                .shape
+                .windows(2)
+                .map(|points| (points[0], points[1]))
+                .chain(std::iter::once((
+                    *offroad.shape.last().unwrap(),
+                    *offroad.shape.first().unwrap(),
+                )))
+                .enumerate()
+            {
+                let segment = Segment::new(start, end);
+                let start_dist = start.distance(pos);
+                let end_dist = end.distance(pos);
+                let segment_dist = segment.distance(pos);
+                if start_dist < tolerance && start_dist < segment_dist + tolerance * 5.0 {
+                    return Selection::offroad_point(o_i, p_i);
+                }
+                if end_dist < tolerance && end_dist < segment_dist + tolerance * 5.0 {
+                    return Selection::offroad_point(o_i, (p_i + 1) % offroad.shape.len());
+                }
+                if segment_dist < tolerance / 2.0 {
+                    return Selection::offroad_segment(o_i, p_i);
+                }
+            }
+        }
+
         return Selection::None;
+    }
+
+    fn triangulate(
+        &mut self,
+        (i, collider): (usize, &Collider),
+        ui: &mut egui::Ui,
+        map: &Map,
+        fill: Color32,
+        image_center_screen: egui::Vec2,
+        circles: &mut Vec<Shape>,
+        is_segment_selected: Option<Segment>,
+        is_point_selected: Option<Vec2>,
+    ) {
+        // TODO: reuse earcut instance
+        let mut earcut = Earcut::new();
+        let mut tris: Vec<usize> = Vec::new();
+
+        //TODO: only do this when colliders are changed
+        earcut.earcut(collider.shape.iter().map(|p| [p.x, p.y]), &[], &mut tris);
+        for tri in tris.chunks(3) {
+            ui.painter().add(Shape::convex_polygon(
+                tri.iter()
+                    .map(|&i| {
+                        let p = collider.shape[i];
+                        pos2(p.x, p.y).round() * self.zoom + image_center_screen
+                    })
+                    .collect(),
+                fill,
+                egui::Stroke::NONE,
+            ));
+        }
+
+        let outline = Shape::Path(PathShape::convex_polygon(
+            collider
+                .shape
+                .iter()
+                .enumerate()
+                .map(|(p_i, p)| {
+                    let p = pos2(p.x, p.y).round() * self.zoom + image_center_screen;
+
+                    circles.push(Shape::Circle(CircleShape {
+                        center: p,
+                        radius: 5.0,
+                        fill: Color32::WHITE,
+                        stroke: (1.0, Color32::BLACK).into(),
+                    }));
+
+                    p
+                })
+                .collect(),
+            Color32::from_rgba_premultiplied(0, 0, 0, 0),
+            (1.0, Color32::BLACK),
+        ));
+
+        ui.painter().add(outline);
+
+        // match self.selection {
+        if let Some(s) = is_segment_selected {
+            let p_1 = pos2(s.start.x, s.start.y).round() * self.zoom + image_center_screen;
+            let p_2 = pos2(s.end.x, s.end.y).round() * self.zoom + image_center_screen;
+
+            ui.painter().add(Shape::LineSegment {
+                points: [p_1, p_2],
+                stroke: (3.0, Color32::RED).into(),
+            });
+        }
+
+        if let Some(p) = is_point_selected {
+            let p = pos2(p.x, p.y).round() * self.zoom + image_center_screen;
+            circles.push(Shape::Circle(CircleShape {
+                center: p,
+                radius: 5.0,
+                fill: Color32::RED,
+                stroke: (1.0, Color32::BLACK).into(),
+            }));
+        }
     }
 }

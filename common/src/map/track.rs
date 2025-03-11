@@ -57,14 +57,14 @@ impl Track {
     }
 }
 
-impl core::ops::Index<usize> for Track {
+impl std::ops::Index<usize> for Track {
     type Output = TrackPoint;
     fn index(&self, index: usize) -> &Self::Output {
         &self.path[index]
     }
 }
 
-impl core::ops::IndexMut<usize> for Track {
+impl std::ops::IndexMut<usize> for Track {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.path[index]
     }
@@ -145,7 +145,6 @@ impl<'a> Iterator for TrackStartIter<'a> {
         loop {
             let mut segment = self.current_segment();
             segment.round();
-
             let segment_length = segment.length();
             if self.offset > segment_length {
                 self.offset -= segment_length;

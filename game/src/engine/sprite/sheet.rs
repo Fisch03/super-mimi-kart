@@ -174,16 +174,10 @@ impl SpriteSheet {
             gl.uniform_1_u32(Some(&uniforms.sprite_index), index);
         }
     }
-
-    pub fn cleanup(&self, gl: &Context) {
-        unsafe {
-            gl.delete_texture(self.texture);
-        }
-    }
 }
 
-impl core::fmt::Debug for SpriteSheet {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl std::fmt::Debug for SpriteSheet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SpriteSheet")
             .field("sprite_dimensions", &self.sprite_dimensions)
             .field("sprite_amount", &self.sprite_amount)

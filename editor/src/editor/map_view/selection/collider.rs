@@ -1,4 +1,4 @@
-use super::{edit_point, GeometryType, ObjectType, SegmentSelect, Select, Selection};
+use super::{edit_point, PointSelect, SegmentSelect, Select, Selection};
 use common::{map::Map, types::*};
 
 fn next_index(collider: Collider, index: usize, map: &Map) -> usize {
@@ -17,13 +17,6 @@ impl Selection {
     }
 }
 impl Select for Collider {
-    fn geometry_type(&self) -> GeometryType {
-        GeometryType::Polygon
-    }
-    fn object_type(&self) -> ObjectType {
-        ObjectType::Collider
-    }
-
     fn translate(&self, map: &mut Map, delta: Vec2) {
         map.colliders[self.0].translate(delta);
     }
@@ -33,6 +26,14 @@ impl Select for Collider {
 pub struct ColliderPoint {
     pub collider: Collider,
     pub p_i: usize,
+}
+impl PointSelect for ColliderPoint {
+    fn point(&self, map: &Map) -> Vec2 {
+        map.colliders[self.collider.0][self.p_i]
+    }
+    fn set_point(&self, map: &mut Map, point: Vec2) {
+        map.colliders[self.collider.0][self.p_i] = point;
+    }
 }
 impl Selection {
     pub fn collider_point(c_i: usize, p_i: usize) -> Self {
@@ -62,13 +63,6 @@ impl ColliderPoint {
     }
 }
 impl Select for ColliderPoint {
-    fn geometry_type(&self) -> GeometryType {
-        GeometryType::Point
-    }
-    fn object_type(&self) -> ObjectType {
-        ObjectType::Collider
-    }
-
     fn translate(&self, map: &mut Map, delta: Vec2) {
         *self.get_point(map) += delta;
     }
@@ -121,13 +115,6 @@ impl SegmentSelect for ColliderSegment {
     }
 }
 impl Select for ColliderSegment {
-    fn geometry_type(&self) -> GeometryType {
-        GeometryType::Segment
-    }
-    fn object_type(&self) -> ObjectType {
-        ObjectType::Collider
-    }
-
     fn translate(&self, map: &mut Map, delta: Vec2) {
         map.colliders[self.collider.0][self.s_i] += delta;
         let next_index = next_index(self.collider, self.s_i, map);

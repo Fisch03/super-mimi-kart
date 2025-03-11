@@ -1,6 +1,6 @@
 use super::View;
 use common::{
-    map::{Collider, Map},
+    map::{Collider, Map, Offroad},
     types::*,
 };
 use egui::{vec2, RichText, TextStyle};
@@ -10,6 +10,7 @@ use egui_phosphor::bold;
 pub enum Tool {
     Move,
     Collider,
+    Offroad,
     Coin,
     ItemBox,
 }
@@ -37,6 +38,7 @@ impl View {
             ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
             tool_button!(Tool::Move, bold::HAND, "Move");
             tool_button!(Tool::Collider, bold::PLUS_SQUARE, "Add a collider");
+            tool_button!(Tool::Offroad, bold::TIRE, "Add offroad");
             tool_button!(Tool::ItemBox, bold::CUBE, "Add an item box");
             tool_button!(Tool::Coin, bold::COINS, "Add a coin");
         });
@@ -49,6 +51,11 @@ impl View {
                 let mut collider = Collider::default();
                 collider.translate(pos);
                 map.colliders.push(collider)
+            }
+            Tool::Offroad => {
+                let mut offroad = Offroad::default();
+                offroad.translate(pos);
+                map.offroad.push(offroad);
             }
             Tool::ItemBox => {
                 map.item_spawns.push(pos);

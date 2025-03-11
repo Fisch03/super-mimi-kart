@@ -1,4 +1,4 @@
-use super::{edit_point, GeometryType, ObjectType, SegmentSelect, Select, Selection};
+use super::{edit_point, PointSelect, SegmentSelect, Select, Selection};
 use common::{
     map::{self, Map},
     types::*,
@@ -41,13 +41,6 @@ impl SegmentSelect for TrackSegment {
     }
 }
 impl Select for TrackSegment {
-    fn geometry_type(&self) -> GeometryType {
-        GeometryType::Segment
-    }
-    fn object_type(&self) -> ObjectType {
-        ObjectType::Track
-    }
-
     fn translate(&self, map: &mut Map, delta: Vec2) {
         map.track.path[self.0].pos += delta;
         let next_index = next_index(self.0, map);
@@ -84,14 +77,15 @@ impl TrackPoint {
         TrackPoint(prev_index(self.0, map))
     }
 }
+impl PointSelect for TrackPoint {
+    fn point(&self, map: &Map) -> Vec2 {
+        map.track[self.0].pos
+    }
+    fn set_point(&self, map: &mut Map, point: Vec2) {
+        map.track[self.0].pos = point;
+    }
+}
 impl Select for TrackPoint {
-    fn geometry_type(&self) -> GeometryType {
-        GeometryType::Point
-    }
-    fn object_type(&self) -> ObjectType {
-        ObjectType::Track
-    }
-
     fn translate(&self, map: &mut Map, delta: Vec2) {
         map.track[self.0].pos += delta;
     }
