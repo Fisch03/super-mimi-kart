@@ -15,7 +15,6 @@ pub struct MeshVert {
 
 pub struct MeshData<'a> {
     pub verts: &'a [MeshVert],
-    pub indices: &'a [u8],
 }
 
 impl MeshData<'_> {
@@ -32,9 +31,9 @@ impl MeshData<'_> {
 }
 
 pub struct Mesh {
+    vert_count: usize,
     vert_buffer: Buffer,
     vert_array: VertexArray,
-    index_buffer: Buffer,
     pub sprite_ref: SheetRef,
 }
 
@@ -42,7 +41,7 @@ impl Mesh {
     pub fn new(ctx: &CreateContext, data: MeshData, sprite_ref: SheetRef) -> Self {
         let transformed_verts = data.transfom_uv_to_sheet(&sprite_ref.get());
 
-        let (vert_array, vert_buffer, index_buffer) = unsafe {
+        let (vert_array, vert_buffer) = unsafe {
             let vert_array = ctx.gl.create_vertex_array().unwrap();
             let vert_buffer = ctx.gl.create_buffer().unwrap();
 
@@ -74,31 +73,26 @@ impl Mesh {
             );
             ctx.gl.enable_vertex_attrib_array(1);
 
-            let index_buffer = ctx.gl.create_buffer().unwrap();
-            ctx.gl
-                .bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(index_buffer));
-            ctx.gl.buffer_data_u8_slice(
-                glow::ELEMENT_ARRAY_BUFFER,
-                bytemuck::cast_slice(&data.indices),
-                glow::STATIC_DRAW,
-            );
 
-            (vert_array, vert_buffer, index_buffer)
+            (vert_array, vert_buffer)
         };
 
         Self {
+            vert_count: data.verts.len(),
             vert_buffer,
             vert_array,
-            index_buffer,
             sprite_ref,
         }
+    }
+
+    pub fn vert_count(&self) -> usize {
+        self.vert_count
     }
 
     fn bind_common(&self, gl: &Context) {
         unsafe {
             gl.bind_vertex_array(Some(self.vert_array));
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.vert_buffer));
-            gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(self.index_buffer));
         }
     }
 
@@ -125,3 +119,69 @@ impl std::fmt::Debug for Mesh {
         f.debug_struct("Mesh").finish()
     }
 }
+
+impl MeshData<'_> {
+#[rustfmt::skip]
+    pub const QUAD: MeshData<'static> = MeshData {
+        verts: &[
+            MeshVert { pos: [-1.0, 0.0,-1.0], uv: [0.0, 0.0] },
+            MeshVert { pos: [-1.0, 0.0, 1.0], uv: [0.0, 1.0] },
+            MeshVert { pos: [ 1.0, 0.0, 1.0], uv: [1.0, 1.0] },
+
+            MeshVert { pos: [-1.0, 0.0,-1.0], uv: [0.0, 0.0] },
+            MeshVert { pos: [ 1.0, 0.0, 1.0], uv: [1.0, 1.0] },
+            MeshVert { pos: [ 1.0, 0.0,-1.0], uv: [1.0, 0.0] }
+        ],
+    };
+
+    #[rustfmt::skip]
+    pub const CUBE : MeshData<'static> = MeshData {
+        verts: &[
+            MeshVert { pos: [-1.0,-1.0,-1.0], uv: [0.0, 0.0] },
+            MeshVert { pos: [ 1.0,-1.0,-1.0], uv: [1.0, 0.0] },
+            MeshVert { pos: [ 1.0, 1.0,-1.0], uv: [1.0, 1.0] },
+            MeshVert { pos: [ 1.0, 1.0,-1.0], uv: [1.0, 1.0] },
+            MeshVert { pos: [-1.0, 1.0,-1.0], uv: [0.0, 1.0] },
+            MeshVert { pos: [-1.0,-1.0,-1.0], uv: [0.0, 0.0] },
+
+            MeshVert { pos: [-1.0,-1.0, 1.0], uv: [0.0, 0.0] },
+            MeshVert { pos: [ 1.0,-1.0, 1.0], uv: [1.0, 0.0] },
+            MeshVert { pos: [ 1.0, 1.0, 1.0], uv: [1.0, 1.0] },
+            MeshVert { pos: [ 1.0, 1.0, 1.0], uv: [1.0, 1.0] },
+            MeshVert { pos: [-1.0, 1.0, 1.0], uv: [0.0, 1.0] },
+            MeshVert { pos: [-1.0,-1.0, 1.0], uv: [0.0, 0.0] },
+
+            MeshVert { pos: [-1.0, 1.0, 1.0], uv: [1.0, 0.0] },
+            MeshVert { pos: [-1.0, 1.0,-1.0], uv: [1.0, 1.0] },
+            MeshVert { pos: [-1.0,-1.0,-1.0], uv: [0.0, 1.0] },
+            MeshVert { pos: [-1.0,-1.0,-1.0], uv: [0.0, 1.0] },
+            MeshVert { pos: [-1.0,-1.0, 1.0], uv: [0.0, 0.0] },
+            MeshVert { pos: [-1.0, 1.0, 1.0], uv: [1.0, 0.0] },
+
+            MeshVert { pos: [ 1.0, 1.0, 1.0], uv: [1.0, 0.0] },
+            MeshVert { pos: [ 1.0, 1.0,-1.0], uv: [1.0, 1.0] },
+            MeshVert { pos: [ 1.0,-1.0,-1.0], uv: [0.0, 1.0] },
+            MeshVert { pos: [ 1.0,-1.0,-1.0], uv: [0.0, 1.0] },
+            MeshVert { pos: [ 1.0,-1.0, 1.0], uv: [0.0, 0.0] },
+            MeshVert { pos: [ 1.0, 1.0, 1.0], uv: [1.0, 0.0] },
+
+            MeshVert { pos: [-1.0,-1.0,-1.0], uv: [0.0, 1.0] },
+            MeshVert { pos: [ 1.0,-1.0,-1.0], uv: [1.0, 1.0] },
+            MeshVert { pos: [ 1.0,-1.0, 1.0], uv: [1.0, 0.0] },
+            MeshVert { pos: [ 1.0,-1.0, 1.0], uv: [1.0, 0.0] },
+            MeshVert { pos: [-1.0,-1.0, 1.0], uv: [0.0, 0.0] },
+            MeshVert { pos: [-1.0,-1.0,-1.0], uv: [0.0, 1.0] },
+
+            MeshVert { pos: [-1.0, 1.0,-1.0], uv: [0.0, 1.0] },
+            MeshVert { pos: [ 1.0, 1.0,-1.0], uv: [1.0, 1.0] },
+            MeshVert { pos: [ 1.0, 1.0, 1.0], uv: [1.0, 0.0] },
+            MeshVert { pos: [ 1.0, 1.0, 1.0], uv: [1.0, 0.0] },
+            MeshVert { pos: [-1.0, 1.0, 1.0], uv: [0.0, 0.0] },
+            MeshVert { pos: [-1.0, 1.0,-1.0], uv: [0.0, 1.0] },
+        ],
+        
+        
+    };
+}
+
+

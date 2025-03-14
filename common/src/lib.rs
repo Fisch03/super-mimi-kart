@@ -7,6 +7,8 @@ use types::*;
 pub const TICKS_PER_SECOND: f32 = 60.0;
 pub const COUNTDOWN_DURATION: f32 = 5.0;
 
+pub const SHELL_SPEED: f32 = 0.2;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ServerMessage {
     // server is preparing a new round
@@ -22,17 +24,34 @@ pub enum ServerMessage {
     // map load took to long, player has been kicked to lobby
     LoadedTooSlow,
 
-    // everyone has loaded the map, start the countdown
+    // everyone has loaded the map, send round init params
     StartRound {
         params: RoundInitParams,
     },
 
+    // countdown has started
+    StartCountdown,
+
     // countdown has finished, start the race
     StartRace,
+
+    // pickup has been picked up or respawned
+    PickUpStateChange {
+        kind: PickupKind,
+        index: usize,
+        state: bool,
+    },
 
     // update the positions of all players
     RaceUpdate {
         players: Vec<(ClientId, PlayerState)>,
+
+        active_items: Vec<ActiveItem>,
+    },
+
+    // player has been hit by an item
+    HitByItem {
+        player: ClientId,
     },
 
     // round has ended, show placements
@@ -54,6 +73,11 @@ impl ServerMessage {
 pub enum ClientMessage {
     Register { name: String }, // register a new player
     LoadedMap,                 // client has loaded the map
+
+    PickUp { kind: PickupKind, index: usize },
+
+    UseItem(ActiveItemKind), // player has used an item
+
     PlayerUpdate(PlayerState), // update the player's position
 }
 impl ClientMessage {
@@ -65,7 +89,7 @@ impl ClientMessage {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PlayerState {
     pub pos: Vec2,
     pub rot: f32,
@@ -76,6 +100,33 @@ pub struct RoundInitParams {
     pub client_id: ClientId,
     pub start_pos: usize,
     pub players: Vec<(ClientId, String)>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum PickupKind {
+    Coin,
+    ItemBox,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActiveItem {
+    pub pos: Vec2,
+    pub kind: ActiveItemKind,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ActiveItemKind {
+    GreenShell { direction: Vec2 },
+    RedShell { target: ClientId },
+    Banana,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum ItemKind {
+    GreenShell,
+    RedShell,
+    Banana,
+    Boost,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]

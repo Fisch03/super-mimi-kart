@@ -43,7 +43,7 @@ impl UnlitShader {
             ctx.cam.bind(ctx, &self.camera_uniforms);
             obj_transform.bind(ctx, &self.model_loc);
 
-            ctx.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_BYTE, 0);
+            ctx.draw_arrays(glow::TRIANGLES, 0, mesh.vert_count() as i32);
         }
     }
 }
@@ -87,7 +87,7 @@ impl BillboardShader {
             obj.bind(ctx, &self.model_loc, &self.sprite_sheet_uniforms);
             ctx.cam.bind(ctx, &self.camera_uniforms);
 
-            ctx.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_BYTE, 0);
+            ctx.draw_arrays(glow::TRIANGLES, 0, 6);
         }
     }
 }

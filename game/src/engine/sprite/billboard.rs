@@ -1,9 +1,9 @@
 use crate::engine::{
     Camera, CreateContext, RenderContext,
     cache::*,
-    mesh::Mesh,
+    mesh::{Mesh, MeshData},
     object::Transform,
-    sprite::{SPRITE_QUAD, SpriteSheetUniforms},
+    sprite::SpriteSheetUniforms,
 };
 use common::types::*;
 use glow::*;
@@ -26,7 +26,7 @@ impl Billboard {
 
         let mesh = ctx
             .assets
-            .load_mesh(name, || Mesh::new(ctx, SPRITE_QUAD, sheet_ref));
+            .load_mesh(name, || Mesh::new(ctx, MeshData::QUAD, sheet_ref));
 
         Self {
             transform,

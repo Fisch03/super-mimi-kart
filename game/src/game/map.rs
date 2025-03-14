@@ -104,16 +104,38 @@ impl MapToScene for Map {
             })
             .collect();
 
+        let item_box_texture = &self.assets()[self.item_box.unwrap()].image;
+        let item_boxes = self
+            .item_spawns
+            .iter()
+            .map(|c| {
+                let pos = map.map_coord_to_world(*c);
+                objects::ItemBox::new(
+                    ctx,
+                    item_box_texture,
+                    Transform::new()
+                        .position(pos.x, 0.30, pos.y)
+                        .scale(0.35, 0.35, 0.35),
+                )
+            })
+            .collect();
+
         objects.push(Box::new(map));
 
         Scene {
             own_id: params.client_id,
+
             player,
             players,
+
             colliders,
             offroad,
+
+            item_boxes,
             coins,
+
             static_objects: objects,
+
             cam,
             map_dimensions: Vec2::new(map_image.width() as f32, map_image.height() as f32),
         }

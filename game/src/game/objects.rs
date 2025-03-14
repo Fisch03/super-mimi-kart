@@ -6,3 +6,6 @@ pub use player::{ExternalPlayer, Player};
 
 mod coin;
 pub use coin::Coin;
+
+mod item_box;
+pub use item_box::ItemBox;

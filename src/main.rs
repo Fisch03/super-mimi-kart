@@ -1,11 +1,11 @@
 use axum::{
+    Router,
     extract::{
-        ws::{Message, WebSocket, WebSocketUpgrade},
         State,
+        ws::{Message, WebSocket, WebSocketUpgrade},
     },
     response::IntoResponse,
     routing::get,
-    Router,
 };
 use futures::{SinkExt, StreamExt};
 use std::{net::SocketAddr, sync::Arc};
@@ -14,7 +14,9 @@ use tower_http::{compression::CompressionLayer, services::ServeDir};
 use common::ClientMessage;
 
 mod server;
-use server::GameServer;
+use server::{GameServer, GameServerHandle};
+
+mod client;
 
 #[tokio::main]
 async fn main() {
@@ -27,7 +29,7 @@ async fn main() {
     let serve_assets_dir = ServeDir::new("./static/assets").append_index_html_on_directories(false);
     let serve_maps_dir = ServeDir::new("./static/maps").append_index_html_on_directories(false);
 
-    let server = Arc::new(GameServer::default());
+    let server = Arc::new(GameServer::new());
 
     let app = app
         .route("/ws", get(ws_handler))
@@ -60,12 +62,12 @@ async fn main() {
 
 async fn ws_handler(
     ws: WebSocketUpgrade,
-    State(server): State<Arc<GameServer>>,
+    State(server): State<Arc<GameServerHandle>>,
 ) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_client(socket, server))
 }
 
-async fn handle_client(socket: WebSocket, server: Arc<GameServer>) {
+async fn handle_client(socket: WebSocket, server: Arc<GameServerHandle>) {
     let client_id = server.allocate_client();
     log::info!("({}) client connecting", client_id);
 
@@ -119,15 +121,7 @@ async fn handle_client(socket: WebSocket, server: Arc<GameServer>) {
 
     let tx_task = tokio::spawn(async move {
         while let Some(msg) = msg_rx.recv().await {
-            let msg = match msg.to_bytes() {
-                Ok(msg) => msg,
-                Err(e) => {
-                    log::warn!("error serializing message: {}", e);
-                    continue;
-                }
-            };
-
-            if let Err(e) = socket_tx.send(Message::Binary(msg)).await {
+            if let Err(e) = socket_tx.send(Message::Binary(msg.bytes().to_vec())).await {
                 log::warn!("error sending message to client: {}", e);
                 break;
             }

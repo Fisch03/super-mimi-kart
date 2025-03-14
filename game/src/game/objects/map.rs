@@ -1,9 +1,9 @@
 use crate::engine::{
     CreateContext, RenderContext,
     cache::MeshRef,
-    mesh::Mesh,
+    mesh::{Mesh, MeshData},
     object::{Object, Transform},
-    sprite::{SPRITE_QUAD, SpriteSheet},
+    sprite::SpriteSheet,
 };
 use common::types::*;
 use image::DynamicImage;
@@ -33,7 +33,7 @@ impl Map {
 
         let mesh = ctx
             .assets
-            .load_mesh("map", || Mesh::new(ctx, SPRITE_QUAD, sheet.clone()));
+            .load_mesh("map", || Mesh::new(ctx, MeshData::QUAD, sheet.clone()));
 
         let dimensions = sheet.get().sprite_dimensions();
         let dimensions = Vec2::new(dimensions.x as f32, dimensions.y as f32) / MAP_SCALE;

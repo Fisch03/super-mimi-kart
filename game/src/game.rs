@@ -32,6 +32,7 @@ struct Scene {
     offroad: Vec<Offroad>,
 
     coins: Vec<objects::Coin>,
+    item_boxes: Vec<objects::ItemBox>,
 
     static_objects: Vec<Box<dyn Object>>,
     map_dimensions: Vec2,
@@ -158,10 +159,11 @@ impl Game {
                         assets: &self.cache,
                     };
                     let scene = map.to_scene(&ctx, self.viewport, &params);
+
                     self.state = State::Running { map, scene };
                 }
 
-                ServerMessage::RaceUpdate { players }
+                ServerMessage::RaceUpdate { players, .. }
                     if matches!(self.state, State::Running { .. }) =>
                 {
                     let scene = match &mut self.state {
@@ -207,6 +209,7 @@ impl Game {
                     .iter_mut()
                     .for_each(|(_, p)| p.update(&mut ctx));
                 scene.coins.iter_mut().for_each(|c| c.update(&mut ctx));
+                scene.item_boxes.iter_mut().for_each(|i| i.update(&mut ctx));
 
                 scene.player.update(&mut ctx);
                 scene.player.update_cam(&mut scene.cam);
@@ -257,6 +260,7 @@ impl Game {
                     .chain(scene.players.values().map(|o| o as &dyn Object))
                     .chain(std::iter::once(&scene.player as &dyn Object))
                     .chain(scene.coins.iter().map(|o| o as &dyn Object))
+                    .chain(scene.item_boxes.iter().map(|o| o as &dyn Object))
                     .map(|o| {
                         let depth = o.as_ref().camera_depth(&scene.cam);
                         (o, depth)
