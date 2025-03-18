@@ -10,6 +10,7 @@ use image::DynamicImage;
 #[derive(Debug)]
 pub struct Coin {
     pos: Vec3,
+    pub state: bool,
     billboard: Billboard,
 }
 
@@ -28,8 +29,13 @@ impl Coin {
 
         Self {
             pos: transform.pos,
+            state: true,
             billboard,
         }
+    }
+
+    pub fn pos(&self) -> Vec2 {
+        Vec2::new(self.pos.x, self.pos.z)
     }
 }
 
@@ -40,7 +46,9 @@ impl Object for Coin {
     }
 
     fn render(&self, ctx: &RenderContext) {
-        self.billboard.render(ctx);
+        if self.state {
+            self.billboard.render(ctx);
+        }
     }
 }
 

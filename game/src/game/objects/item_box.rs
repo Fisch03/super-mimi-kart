@@ -5,12 +5,14 @@ use crate::engine::{
     object::{Object, Transform},
     sprite::SpriteSheet,
 };
+use common::types::*;
 
 use image::DynamicImage;
 
 #[derive(Debug)]
 pub struct ItemBox {
     transform: Transform,
+    pub state: bool,
     mesh: MeshRef,
 }
 
@@ -24,7 +26,15 @@ impl ItemBox {
             .assets
             .load_mesh("item_box", || Mesh::new(ctx, MeshData::CUBE, sheet));
 
-        Self { transform, mesh }
+        Self {
+            transform,
+            state: true,
+            mesh,
+        }
+    }
+
+    pub fn pos(&self) -> Vec2 {
+        Vec2::new(self.transform.pos.x, self.transform.pos.z)
     }
 }
 
@@ -35,7 +45,9 @@ impl Object for ItemBox {
     }
 
     fn render(&self, ctx: &RenderContext) {
-        ctx.shaders.unlit.render(ctx, self, &self.mesh.get());
+        if self.state {
+            ctx.shaders.unlit.render(ctx, self, &self.mesh.get());
+        }
     }
 }
 

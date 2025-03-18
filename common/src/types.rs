@@ -122,3 +122,19 @@ impl Segment {
         self.end = self.end.round();
     }
 }
+
+pub trait Smooth {
+    fn lerp(a: Self, b: Self, t: f32) -> Self;
+    fn smooth_step(a: Self, b: Self, t: f32) -> Self;
+}
+
+impl Smooth for f32 {
+    fn lerp(a: f32, b: f32, x: f32) -> f32 {
+        a + (b - a) * x
+    }
+
+    fn smooth_step(a: f32, b: f32, x: f32) -> f32 {
+        let t = ((x - a) / (b - a)).clamp(0.0, 1.0);
+        t * t * (3.0 - 2.0 * t)
+    }
+}

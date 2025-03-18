@@ -1,4 +1,4 @@
-use common::{ClientId, ClientMessage, ServerMessage, map::Map, types::*};
+use common::{ClientId, ClientMessage, PickupKind, ServerMessage, map::Map, types::*};
 use glow::*;
 use std::collections::HashMap;
 use std::sync::mpsc;
@@ -177,6 +177,31 @@ impl Game {
                         }
                     }
                 }
+
+                ServerMessage::PickUpStateChange { kind, index, state }
+                    if matches!(self.state, State::Running { .. }) =>
+                {
+                    let scene = match &mut self.state {
+                        State::Running { scene, .. } => scene,
+                        _ => unreachable!(),
+                    };
+
+                    match kind {
+                        PickupKind::Coin => {
+                            let coins = &mut scene.coins;
+                            if let Some(coin) = coins.get_mut(index) {
+                                coin.state = state;
+                            }
+                        }
+                        PickupKind::ItemBox => {
+                            let item_boxes = &mut scene.item_boxes;
+                            if let Some(item_box) = item_boxes.get_mut(index) {
+                                item_box.state = state;
+                            }
+                        }
+                    }
+                }
+
                 _ => log::warn!("ignoring unexpected message: {:?}", msg),
             }
         }
@@ -212,7 +237,9 @@ impl Game {
                 scene.item_boxes.iter_mut().for_each(|i| i.update(&mut ctx));
 
                 scene.player.update(&mut ctx);
-                scene.player.update_cam(&mut scene.cam);
+                scene
+                    .player
+                    .late_update(&mut ctx, &scene.coins, &scene.item_boxes, &mut scene.cam);
             }
             State::Loading { map_download } => {
                 let map = match map_download.poll() {

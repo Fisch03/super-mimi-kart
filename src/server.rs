@@ -173,6 +173,9 @@ impl GameServerHandle {
     }
 
     pub async fn handle_client_message(self: &Arc<Self>, client_id: ClientId, msg: ClientMessage) {
+        // if !matches!(msg, ClientMessage::PlayerUpdate(_)) {
+        //     log::info!("received message from client {}: {:?}", client_id, msg);
+        // }
         self.clients.handle_client_message(client_id, msg).await;
     }
 }

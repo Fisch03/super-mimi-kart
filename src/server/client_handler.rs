@@ -212,6 +212,15 @@ impl ClientManager {
 
                 ClientManagerCommand::PickupRespawn { kind, index } => {
                     self.game_state.respawn_pickup(kind, index);
+                    self.send(
+                        SendTo::InGameAll,
+                        ServerMessage::PickUpStateChange {
+                            kind,
+                            index,
+                            state: true,
+                        },
+                    )
+                    .await;
                 }
             }
         }
@@ -343,11 +352,11 @@ impl ClientManager {
 
                 if success {
                     self.send(
-                        SendTo::InGameExcept(id),
+                        SendTo::InGameAll,
                         ServerMessage::PickUpStateChange {
                             kind,
                             index,
-                            state: true,
+                            state: false,
                         },
                     )
                     .await;

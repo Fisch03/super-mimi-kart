@@ -3,7 +3,8 @@ use crate::engine::{
     object::{Object, Transform},
     sprite::{Billboard, SpriteSheet},
 };
-use common::{ClientMessage, PlayerState, types::*};
+use crate::game::objects::{Coin, ItemBox};
+use common::{ClientMessage, PickupKind, PlayerState, types::*};
 
 use nalgebra::Point2;
 use parry2d::math::{Isometry, Vector};
@@ -23,7 +24,7 @@ fn load_player(ctx: &CreateContext, transform: Transform) -> Billboard {
     billboard.rot = transform.rot;
     billboard.rotation_offset = ROTATION_OFFSET;
 
-    billboard.scale_uniform(0.75);
+    billboard.scale_uniform(0.5);
 
     billboard
 }
@@ -31,12 +32,23 @@ fn load_player(ctx: &CreateContext, transform: Transform) -> Billboard {
 #[derive(Debug)]
 pub struct Player {
     billboard: Billboard,
+
+    input: Vec2,
     velocity: Vec2,
-    acceleration: Vec2,
+
+    drift_state: DriftState,
+
+    coins: u32,
 
     camera_angle: f32,
-    look_back: bool,
     collider: Ball,
+}
+
+#[derive(Debug)]
+enum DriftState {
+    None,
+    Left,
+    Right,
 }
 
 impl Player {
@@ -45,16 +57,49 @@ impl Player {
 
         Self {
             billboard,
+
+            input: Vec2::new(0.0, 0.0),
             velocity: Vec2::new(0.0, 0.0),
-            acceleration: Vec2::new(0.0, 0.0),
+
+            coins: 0,
+
+            drift_state: DriftState::None,
 
             camera_angle: 0.0,
-            look_back: false,
-            collider: Ball::new(6.0),
+            collider: Ball::new(5.0),
         }
     }
 
-    pub fn update_cam(&self, cam: &mut Camera) {
+    pub fn late_update(
+        &mut self,
+        ctx: &mut UpdateContext,
+        coins: &[Coin],
+        item_boxes: &[ItemBox],
+        cam: &mut Camera,
+    ) {
+        let pos_2d = Vec2::new(self.pos.x, self.pos.z);
+        for (index, coin) in coins.iter().enumerate().filter(|(_, coin)| coin.state) {
+            if coin.pos().distance(pos_2d) < 1.0 {
+                ctx.send_msg(ClientMessage::PickUp {
+                    kind: PickupKind::Coin,
+                    index,
+                });
+            }
+        }
+
+        for (index, item_box) in item_boxes
+            .iter()
+            .enumerate()
+            .filter(|(_, item_box)| item_box.state)
+        {
+            if item_box.pos().distance(pos_2d) < 1.0 {
+                ctx.send_msg(ClientMessage::PickUp {
+                    kind: PickupKind::ItemBox,
+                    index,
+                });
+            }
+        }
+
         let camera_forward = Vec3::new(
             self.camera_angle.to_radians().cos(),
             0.0,
@@ -68,52 +113,47 @@ impl Player {
         // let camera_shift = camera_right * rot_diff * 0.005;
 
         cam.transform.pos =
-            self.pos - camera_forward * 5.0 + Vec3::new(0.0, 1.2, 0.0) /* + camera_shift */;
+            self.pos - camera_forward * 3.0 + Vec3::new(0.0, 1.0, 0.0) /* + camera_shift */;
         cam.transform.rot = Rotation::new(-10.0, self.camera_angle, self.rot.z);
         cam.set_fov(60.0 + self.velocity.y * 0.3);
     }
 
     pub fn key_down(&mut self, key: &str) {
         match key {
-            "KeyW" => self.acceleration.y = 0.4,
-            "KeyS" => self.acceleration.y = -0.4,
+            "KeyW" => self.input.y = 1.0,
+            "KeyS" => self.input.y = -0.5,
             "KeyA" => {
-                self.acceleration.x = -80.0;
-                self.velocity.x = self.velocity.x.min(10.0);
+                self.input.x = -1.0;
             }
             "KeyD" => {
-                self.acceleration.x = 80.0;
-                self.velocity.x = self.velocity.x.max(-10.0);
+                self.input.x = 1.0;
             }
 
-            "ArrowDown" => self.look_back = true,
             _ => {}
         }
     }
     pub fn key_up(&mut self, key: &str) {
         match key {
             "KeyW" => {
-                if self.acceleration.y > 0.0 {
-                    self.acceleration.y = 0.0
+                if self.input.y > 0.0 {
+                    self.input.y = 0.0
                 }
             }
             "KeyS" => {
-                if self.acceleration.y < 0.0 {
-                    self.acceleration.y = 0.0
+                if self.input.y < 0.0 {
+                    self.input.y = 0.0
                 }
             }
             "KeyA" => {
-                if self.acceleration.x < 0.0 {
-                    self.acceleration.x = 0.0
+                if self.input.x < 0.0 {
+                    self.input.x = 0.0
                 }
             }
             "KeyD" => {
-                if self.acceleration.x > 0.0 {
-                    self.acceleration.x = 0.0
+                if self.input.x > 0.0 {
+                    self.input.x = 0.0
                 }
             }
-
-            "ArrowDown" => self.look_back = false,
 
             _ => {}
         }
@@ -122,18 +162,13 @@ impl Player {
 
 impl Object for Player {
     fn update(&mut self, ctx: &mut UpdateContext) {
-        self.velocity += self.acceleration;
-        self.velocity.y -= self.velocity.y * 0.015;
-        self.velocity.x -= self.velocity.x * 0.09;
+        const MOVE_ACCEL: f32 = 15.0;
+        const STEER_ACCEL: f32 = 50.0;
 
-        let forward = Vec3::new(
-            self.rot.y.to_radians().cos(),
-            0.0,
-            self.rot.y.to_radians().sin(),
-        );
+        let mut move_accel = self.input.y * MOVE_ACCEL;
+        let steer_accel = self.input.x * STEER_ACCEL;
 
-        self.rot.y += self.velocity.x * ctx.dt * 0.1;
-
+        // offroad
         let pos_map = ctx.world_coord_to_map(Vec2::new(self.pos.x, self.pos.z));
         let pos_map = Point2::new(pos_map.x, pos_map.y);
         if ctx
@@ -141,13 +176,23 @@ impl Object for Player {
             .iter()
             .any(|offroad| point_in_poly2d(&pos_map, &offroad.0))
         {
-            self.velocity.y -= self.velocity.y * 0.02;
+            move_accel *= 0.5;
         }
 
-        let mut new_pos = self.pos + forward * self.velocity.y * ctx.dt;
+        // TODO: use smooth_step for movement but thats broken rn
+        self.velocity.y = f32::lerp(self.velocity.y, move_accel, ctx.dt * 2.0);
+        self.velocity.x = f32::lerp(self.velocity.x, steer_accel, ctx.dt * 3.0);
 
-        //TODO: it would be a lot nicer to perform the collider pos translations at the beginning
-        //but that didnt work the last time i tried it(?)
+        let forward = Vec3::new(
+            self.rot.y.to_radians().cos(),
+            0.0,
+            self.rot.y.to_radians().sin(),
+        );
+
+        let mut new_pos = self.pos + forward * self.velocity.y * ctx.dt;
+        let new_rot = self.rot + Rotation::new(0.0, self.velocity.x * ctx.dt, 0.0);
+
+        // collision
         let collider_pos = Isometry::new(nalgebra::zero(), 0.0);
         let new_pos_map = ctx.world_coord_to_map(Vec2::new(new_pos.x, new_pos.z));
         let own_pos = Isometry::new(Vector::new(new_pos_map.x, new_pos_map.y), 0.0);
@@ -170,15 +215,18 @@ impl Object for Player {
                 );
 
                 self.velocity.y = 0.0;
-                // self.acceleration.y = 0.0;
             }
         }
 
         self.pos = new_pos;
+        self.rot = new_rot;
 
-        let rot_diff = self.rot.y - self.camera_angle;
-        self.camera_angle = self.camera_angle + 0.012 * rot_diff;
+        // camera
+        // let rot_diff = self.rot.y - self.camera_angle;
+        // self.camera_angle = self.camera_angle + 0.012 * rot_diff;
+        self.camera_angle = self.rot.y;
 
+        // net
         if ctx.tick {
             ctx.send_msg(ClientMessage::PlayerUpdate(PlayerState {
                 pos: Vec2::new(self.pos.x, self.pos.z),

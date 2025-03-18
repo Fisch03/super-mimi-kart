@@ -1,6 +1,9 @@
 use crate::game::{
     Collider, Offroad,
-    objects::map::{map_coord_to_world, world_coord_to_map},
+    objects::{
+        Coin, ItemBox,
+        map::{map_coord_to_world, world_coord_to_map},
+    },
 };
 use common::{ClientMessage, types::*};
 
