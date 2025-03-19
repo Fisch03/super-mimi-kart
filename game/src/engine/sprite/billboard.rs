@@ -64,12 +64,8 @@ impl Billboard {
         let mesh = self.mesh.get();
 
         let sprite_amt = mesh.sprite_ref.get().sprite_amount();
-        let sprite_index =
-            (angle / (std::f32::consts::PI * 2.0) * sprite_amt as f32).round() as i32 / 2
-                % sprite_amt as i32;
-        let sprite_index = (sprite_index + sprite_amt as i32 / 2)
-            .max(0)
-            .min(sprite_amt as i32 - 1);
+
+        let sprite_index = (angle / (std::f32::consts::PI * 2.0) * sprite_amt as f32).floor();
 
         mesh.bind_index(ctx, sprite_sheet_uniforms, sprite_index as u32);
 

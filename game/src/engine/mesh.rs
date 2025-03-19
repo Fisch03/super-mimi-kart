@@ -17,19 +17,6 @@ pub struct MeshData<'a> {
     pub verts: &'a [MeshVert],
 }
 
-impl MeshData<'_> {
-    fn transfom_uv_to_sheet(&self, sheet: &SpriteSheet) -> Vec<MeshVert> {
-        let u_scale = 1.0 / sheet.sprite_amount() as f32;
-        self.verts
-            .iter()
-            .map(|vert| MeshVert {
-                pos: vert.pos,
-                uv: [vert.uv[0] * u_scale, vert.uv[1]],
-            })
-            .collect()
-    }
-}
-
 pub struct Mesh {
     vert_count: usize,
     vert_buffer: Buffer,
@@ -39,7 +26,6 @@ pub struct Mesh {
 
 impl Mesh {
     pub fn new(ctx: &CreateContext, data: MeshData, sprite_ref: SheetRef) -> Self {
-        let transformed_verts = data.transfom_uv_to_sheet(&sprite_ref.get());
 
         let (vert_array, vert_buffer) = unsafe {
             let vert_array = ctx.gl.create_vertex_array().unwrap();
@@ -50,7 +36,7 @@ impl Mesh {
             ctx.gl.bind_buffer(glow::ARRAY_BUFFER, Some(vert_buffer));
             ctx.gl.buffer_data_u8_slice(
                 glow::ARRAY_BUFFER,
-                bytemuck::cast_slice(&transformed_verts),
+                bytemuck::cast_slice(&data.verts),
                 glow::STATIC_DRAW,
             );
 

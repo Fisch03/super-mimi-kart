@@ -11,7 +11,7 @@ use parry2d::math::{Isometry, Vector};
 use parry2d::shape::Ball;
 use parry2d::utils::point_in_poly2d;
 
-const ROTATION_OFFSET: f32 = -92.0;
+const ROTATION_OFFSET: f32 = 184.0;
 
 fn load_player(ctx: &CreateContext, transform: Transform) -> Billboard {
     let sprite_sheet = ctx
@@ -114,7 +114,7 @@ impl Player {
 
         cam.transform.pos =
             self.pos - camera_forward * 3.0 + Vec3::new(0.0, 1.0, 0.0) /* + camera_shift */;
-        cam.transform.rot = Rotation::new(-10.0, self.camera_angle, self.rot.z);
+        cam.transform.rot = Rotation::new(-5.0, self.camera_angle, self.rot.z);
         cam.set_fov(60.0 + self.velocity.y * 0.3);
     }
 
@@ -222,9 +222,10 @@ impl Object for Player {
         self.rot = new_rot;
 
         // camera
-        // let rot_diff = self.rot.y - self.camera_angle;
-        // self.camera_angle = self.camera_angle + 0.012 * rot_diff;
-        self.camera_angle = self.rot.y;
+        let rot_diff = self.rot.y - self.camera_angle;
+        self.camera_angle = self.camera_angle + 0.02 * rot_diff;
+        // self.camera_angle = self.rot.y;
+        // self.camera_angle += ctx.dt * 40.0;
 
         // net
         if ctx.tick {

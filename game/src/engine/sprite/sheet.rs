@@ -11,28 +11,22 @@ pub struct SpriteSheet {
 }
 
 pub struct SpriteSheetUniforms {
-    pub sprite_size: UniformLocation,
-    pub sprite_sheet_size: UniformLocation,
+    pub sprite_amount: UniformLocation,
     pub sprite_index: UniformLocation,
 }
 
 impl SpriteSheetUniforms {
     pub fn from_program(gl: &Context, program: Program) -> Self {
-        let sprite_size = unsafe {
-            gl.get_uniform_location(program, "sprite_size")
-                .expect("shader has uniform sprite_size")
-        };
-        let sprite_sheet_size = unsafe {
-            gl.get_uniform_location(program, "sprite_sheet_size")
-                .expect("shader has uniform sprite_sheet_size")
+        let sprite_amount = unsafe {
+            gl.get_uniform_location(program, "sprite_amount")
+                .expect("shader has uniform sprite_amount")
         };
         let sprite_index = unsafe {
             gl.get_uniform_location(program, "sprite_index")
                 .expect("shader has uniform sprite_index")
         };
         Self {
-            sprite_size,
-            sprite_sheet_size,
+            sprite_amount,
             sprite_index,
         }
     }
@@ -59,15 +53,16 @@ impl SpriteSheet {
         for sprite in sprite_dir.files() {
             let sprite_tex = sprite.contents();
             match image::load_from_memory(sprite_tex) {
-                Ok(sprite_img) => sprite_imgs.push(sprite_img),
+                Ok(sprite_img) => sprite_imgs.push((sprite.path(), sprite_img)),
                 Err(e) => {
                     log::warn!("skipping invalid sprite '{:?}': {:?}", sprite.path(), e);
                     continue;
                 }
             }
         }
+        sprite_imgs.sort_by_key(|(path, _)| *path);
 
-        let sprite_imgs: Vec<_> = sprite_imgs.iter().collect();
+        let sprite_imgs: Vec<_> = sprite_imgs.iter().map(|(_, img)| img).collect();
 
         Self::from_images(gl, &sprite_imgs)
     }
@@ -117,6 +112,16 @@ impl SpriteSheet {
                 glow::TEXTURE_MAG_FILTER,
                 glow::NEAREST as i32,
             );
+            // gl.tex_parameter_i32(
+            //     glow::TEXTURE_2D,
+            //     glow::TEXTURE_WRAP_S,
+            //     glow::CLAMP_TO_EDGE as i32,
+            // );
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_WRAP_T,
+                glow::CLAMP_TO_EDGE as i32,
+            );
 
             tex
         };
@@ -165,12 +170,7 @@ impl SpriteSheet {
     pub fn bind_index(&self, gl: &Context, uniforms: &SpriteSheetUniforms, index: u32) {
         unsafe {
             gl.bind_texture(glow::TEXTURE_2D, Some(self.texture));
-            gl.uniform_2_u32(
-                Some(&uniforms.sprite_size),
-                self.sprite_dimensions.x,
-                self.sprite_dimensions.y,
-            );
-            gl.uniform_1_u32(Some(&uniforms.sprite_sheet_size), self.sprite_amount);
+            gl.uniform_1_u32(Some(&uniforms.sprite_amount), self.sprite_amount);
             gl.uniform_1_u32(Some(&uniforms.sprite_index), index);
         }
     }
