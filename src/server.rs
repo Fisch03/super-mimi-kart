@@ -9,7 +9,7 @@ use std::{
         Arc,
         atomic::{AtomicU32, Ordering},
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::{sync::mpsc, time::interval};
 
@@ -126,18 +126,24 @@ impl GameServer {
             self.clients
                 .send(SendTo::InGameAll, ServerMessage::StartRace)
                 .await;
+            let race_start = Instant::now();
 
             let mut tick_interval =
                 interval(Duration::from_secs_f64(1.0 / TICKS_PER_SECOND as f64));
 
             loop {
                 tokio::select! {
-                    _ = tick_interval.tick() => match self.clients.game_tick().await {
-                        TickResult::RaceOver => break,
-                        TickResult::NoChange => {}
+                    _ = tick_interval.tick() => {
+                        let race_time = race_start.elapsed().as_secs_f32();
+                        match self.clients.game_tick(race_time).await {
+                            TickResult::RaceOver => break,
+                            TickResult::NoChange => {}
+                        }
                     }
                 }
             }
+
+            self.clients.complete_round().await;
         }
     }
 }

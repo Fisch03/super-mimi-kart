@@ -1,4 +1,4 @@
-use common::{ActiveItem, ClientId, ClientMessage, PickupKind, ServerMessage, map::Map};
+use common::{ActiveItem, ClientId, ClientMessage, PickupKind, Placement, ServerMessage, map::Map};
 use std::collections::HashMap;
 use tokio::{
     sync::{mpsc, oneshot},
@@ -17,9 +17,13 @@ pub struct ClientManager {
     waiting_clients: Vec<Client>,
     loading_clients: Vec<Client>,
     clients: HashMap<ClientId, Client>,
+    finished_clients: Vec<(Client, f32)>,
 
     waiting_for_clients: Option<oneshot::Sender<()>>,
     loading_task: Option<LoadingTask>,
+
+    end_round_task: Option<task::JoinHandle<()>>,
+    force_end_round: bool,
 
     game_state: GameState,
 }
@@ -48,10 +52,16 @@ enum ClientManagerCommand {
         map: Map,
         result_tx: oneshot::Sender<Vec<(ClientId, String)>>,
     },
-    GameTick(oneshot::Sender<TickResult>),
+    GameTick {
+        race_time: f32,
+        result_tx: oneshot::Sender<TickResult>,
+    },
+
+    CompleteRound,
 
     // internal
     LoadTimeout,
+    RaceTimeout,
     PickupRespawn {
         kind: PickupKind,
         index: usize,
@@ -124,14 +134,24 @@ impl ClientManagerHandle {
         rx.await.unwrap()
     }
 
-    pub async fn game_tick(&self) -> TickResult {
+    pub async fn game_tick(&self, race_time: f32) -> TickResult {
         let (tx, rx) = oneshot::channel();
         self.tx
-            .send(ClientManagerCommand::GameTick(tx))
+            .send(ClientManagerCommand::GameTick {
+                result_tx: tx,
+                race_time,
+            })
             .await
             .unwrap();
 
         rx.await.unwrap()
+    }
+
+    pub async fn complete_round(&self) {
+        self.tx
+            .send(ClientManagerCommand::CompleteRound)
+            .await
+            .unwrap();
     }
 
     async fn pickup_respawn(&self, kind: PickupKind, index: usize) {
@@ -153,9 +173,12 @@ impl ClientManager {
             waiting_clients: Vec::new(),
             loading_clients: Vec::new(),
             clients: HashMap::new(),
+            finished_clients: Vec::new(),
 
             loading_task: None,
             waiting_for_clients: None,
+            end_round_task: None,
+            force_end_round: false,
 
             game_state: GameState::default(),
         };
@@ -196,10 +219,15 @@ impl ClientManager {
                 } => {
                     self.load_map(map_path, map, result_tx).await;
                 }
-                ClientManagerCommand::GameTick(result_tx) => {
-                    let result = self.game_tick().await;
+                ClientManagerCommand::GameTick {
+                    result_tx,
+                    race_time,
+                } => {
+                    let result = self.game_tick(race_time).await;
                     let _ = result_tx.send(result);
                 }
+
+                ClientManagerCommand::CompleteRound => self.complete_round().await,
 
                 ClientManagerCommand::LoadTimeout => {
                     for client in &self.loading_clients {
@@ -209,6 +237,8 @@ impl ClientManager {
                     }
                     self.waiting_clients.extend(self.loading_clients.drain(..));
                 }
+
+                ClientManagerCommand::RaceTimeout => self.force_end_round = true,
 
                 ClientManagerCommand::PickupRespawn { kind, index } => {
                     self.game_state.respawn_pickup(kind, index);
@@ -291,11 +321,12 @@ impl ClientManager {
         });
     }
 
-    async fn game_tick(&mut self) -> TickResult {
+    async fn game_tick(&mut self, race_time: f32) -> TickResult {
         let handle = self.make_handle();
         self.game_state.tick(&mut self.clients, handle).await;
 
         let race_update = ServerMessage::RaceUpdate {
+            race_time,
             players: self
                 .clients
                 .iter()
@@ -306,7 +337,39 @@ impl ClientManager {
 
         self.send(SendTo::InGameAll, race_update).await;
 
-        TickResult::NoChange
+        if self.clients.is_empty() || self.force_end_round {
+            TickResult::RaceOver
+        } else {
+            TickResult::NoChange
+        }
+    }
+
+    async fn complete_round(&mut self) {
+        self.end_round_task.take().map(|t| t.abort());
+        self.force_end_round = false;
+
+        let placements: Vec<_> = self
+            .finished_clients
+            .iter()
+            .map(|(c, finish_time)| Placement {
+                client_id: c.id(),
+                finish_time: Some(*finish_time),
+            })
+            .chain(self.clients.values().map(|c| Placement {
+                client_id: c.id(),
+                finish_time: None,
+            }))
+            .collect();
+
+        log::info!("round completed with placements\n {:#?}", placements);
+
+        self.send(SendTo::InGameAll, ServerMessage::EndRound { placements })
+            .await;
+
+        self.waiting_clients
+            .extend(self.clients.drain().map(|(_, c)| c));
+        self.waiting_clients
+            .extend(self.finished_clients.drain(..).map(|(c, _)| c));
     }
 
     async fn handle_client_message(&mut self, id: ClientId, message: ClientMessage) {
@@ -369,6 +432,28 @@ impl ClientManager {
                 }
             }
 
+            ClientMessage::FinishRound { race_time } => {
+                if let Some(client) = self.clients.remove(&id) {
+                    self.finished_clients.push((client, race_time));
+                }
+
+                if self.end_round_task.is_none()
+                    && !self.clients.is_empty()
+                    && !self.force_end_round
+                {
+                    let handle = self.make_handle();
+                    let handle = task::spawn(async move {
+                        time::sleep(Duration::from_secs(10)).await;
+                        handle
+                            .tx
+                            .send(ClientManagerCommand::RaceTimeout)
+                            .await
+                            .unwrap();
+                    });
+                    self.end_round_task = Some(handle);
+                }
+            }
+
             ClientMessage::Register { .. } => {
                 log::warn!("client {id} tried to register again");
             }
@@ -394,12 +479,20 @@ impl ClientManager {
                 }
             }
             SendTo::InGameAll => {
-                for client in self.clients.values() {
+                for client in self
+                    .clients
+                    .values()
+                    .chain(self.finished_clients.iter().map(|(c, _)| c))
+                {
                     client.send(msg.clone()).await;
                 }
             }
             SendTo::InGameExcept(id) => {
-                for client in self.clients.values() {
+                for client in self
+                    .clients
+                    .values()
+                    .chain(self.finished_clients.iter().map(|(c, _)| c))
+                {
                     if client.id() != id {
                         client.send(msg.clone()).await;
                     }
@@ -407,6 +500,10 @@ impl ClientManager {
             }
             SendTo::InGameOnly(id) => {
                 if let Some(client) = self.clients.get(&id) {
+                    client.send(msg).await;
+                } else if let Some((client, _)) =
+                    self.finished_clients.iter().find(|(c, _)| c.id() == id)
+                {
                     client.send(msg).await;
                 }
             }

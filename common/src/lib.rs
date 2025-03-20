@@ -45,6 +45,7 @@ pub enum ServerMessage {
 
     // update the positions of all players
     RaceUpdate {
+        race_time: f32,
         players: Vec<(ClientId, PlayerState)>,
 
         active_items: Vec<ActiveItem>,
@@ -57,7 +58,7 @@ pub enum ServerMessage {
 
     // round has ended, show placements
     EndRound {
-        placements: Vec<()>,
+        placements: Vec<Placement>,
     },
 }
 
@@ -80,6 +81,8 @@ pub enum ClientMessage {
     UseItem(ActiveItemKind), // player has used an item
 
     PlayerUpdate(PlayerState), // update the player's position
+
+    FinishRound { race_time: f32 }, // player has finished the round
 }
 impl ClientMessage {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, postcard::Error> {
@@ -130,6 +133,12 @@ pub enum ItemKind {
     RedShell,
     Banana,
     Boost,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct Placement {
+    pub client_id: ClientId,
+    pub finish_time: Option<f32>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
