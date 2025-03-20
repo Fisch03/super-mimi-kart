@@ -134,6 +134,8 @@ impl Game {
     }
 
     pub fn update(&mut self, dt: f32, tick: bool) {
+        let dt = dt.min(0.1); // cap to 100ms
+
         // handle messages
         while let Ok(msg) = self.ws_rx.try_recv() {
             match msg {
@@ -208,7 +210,7 @@ impl Game {
 
         // update
         match &mut self.state {
-            State::Running { scene, .. } => {
+            State::Running { scene, map } => {
                 let mut ctx = UpdateContext {
                     dt,
                     tick,
@@ -220,6 +222,8 @@ impl Game {
                             Err(err) => log::error!("Error sending message: {:?}", err),
                         }
                     },
+
+                    map: &map,
 
                     colliders: &scene.colliders,
                     offroad: &scene.offroad,
@@ -237,9 +241,13 @@ impl Game {
                 scene.item_boxes.iter_mut().for_each(|i| i.update(&mut ctx));
 
                 scene.player.update(&mut ctx);
-                scene
-                    .player
-                    .late_update(&mut ctx, &scene.coins, &scene.item_boxes, &mut scene.cam);
+                scene.player.late_update(
+                    &mut ctx,
+                    &scene.players,
+                    &scene.coins,
+                    &scene.item_boxes,
+                    &mut scene.cam,
+                );
             }
             State::Loading { map_download } => {
                 let map = match map_download.poll() {

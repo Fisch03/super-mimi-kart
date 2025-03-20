@@ -34,6 +34,7 @@ impl MapToScene for Map {
         let player_start = map.map_coord_to_world(player_start);
         let player = objects::Player::new(
             ctx,
+            params.start_pos,
             Transform::new()
                 .position(player_start.x, 0.0, player_start.y)
                 .rotation(0.0, 270.0, 0.0),

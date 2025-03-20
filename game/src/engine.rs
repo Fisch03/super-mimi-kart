@@ -1,11 +1,8 @@
 use crate::game::{
     Collider, Offroad,
-    objects::{
-        Coin, ItemBox,
-        map::{map_coord_to_world, world_coord_to_map},
-    },
+    objects::map::{map_coord_to_world, world_coord_to_map},
 };
-use common::{ClientMessage, types::*};
+use common::{ClientMessage, map::Map, types::*};
 
 pub mod cache;
 pub use cache::AssetCache;
@@ -56,6 +53,8 @@ pub struct UpdateContext<'a> {
     pub tick: bool,
     pub send_msg: &'a mut dyn FnMut(ClientMessage),
     pub assets: &'a AssetCache,
+
+    pub map: &'a Map,
 
     pub colliders: &'a [Collider],
     pub offroad: &'a [Offroad],

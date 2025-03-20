@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod map;
 pub mod types;
+pub use map::TrackPosition;
 use types::*;
 
 pub const TICKS_PER_SECOND: f32 = 60.0;
@@ -93,6 +94,7 @@ impl ClientMessage {
 pub struct PlayerState {
     pub pos: Vec2,
     pub rot: f32,
+    pub track_pos: TrackPosition,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

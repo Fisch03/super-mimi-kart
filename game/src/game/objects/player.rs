@@ -4,7 +4,8 @@ use crate::engine::{
     sprite::{Billboard, SpriteSheet},
 };
 use crate::game::objects::{Coin, ItemBox};
-use common::{ClientMessage, PickupKind, PlayerState, types::*};
+use common::{ClientId, ClientMessage, PickupKind, PlayerState, map::TrackPosition, types::*};
+use std::collections::HashMap;
 
 use nalgebra::Point2;
 use parry2d::math::{Isometry, Vector};
@@ -33,6 +34,9 @@ fn load_player(ctx: &CreateContext, transform: Transform) -> Billboard {
 pub struct Player {
     billboard: Billboard,
 
+    track_pos: TrackPosition,
+    place: usize,
+
     input: Vec2,
     velocity: Vec2,
 
@@ -52,11 +56,14 @@ enum DriftState {
 }
 
 impl Player {
-    pub fn new(ctx: &CreateContext, transform: Transform) -> Self {
+    pub fn new(ctx: &CreateContext, place: usize, transform: Transform) -> Self {
         let billboard = load_player(ctx, transform);
 
         Self {
             billboard,
+
+            track_pos: TrackPosition::default(),
+            place,
 
             input: Vec2::new(0.0, 0.0),
             velocity: Vec2::new(0.0, 0.0),
@@ -73,10 +80,17 @@ impl Player {
     pub fn late_update(
         &mut self,
         ctx: &mut UpdateContext,
+        players: &HashMap<ClientId, ExternalPlayer>,
         coins: &[Coin],
         item_boxes: &[ItemBox],
         cam: &mut Camera,
     ) {
+        self.place = players
+            .values()
+            .filter(|player| player.track_pos > self.track_pos)
+            .count()
+            + 1;
+
         let pos_2d = Vec2::new(self.pos.x, self.pos.z);
         for (index, coin) in coins.iter().enumerate().filter(|(_, coin)| coin.state) {
             if coin.pos().distance(pos_2d) < 1.0 {
@@ -218,6 +232,12 @@ impl Object for Player {
             }
         }
 
+        let old_pos_map = ctx.world_coord_to_map(Vec2::new(self.pos.x, self.pos.z));
+
+        ctx.map
+            .track
+            .calc_position(old_pos_map, new_pos_map, &mut self.track_pos);
+
         self.pos = new_pos;
         self.rot = new_rot;
 
@@ -232,6 +252,7 @@ impl Object for Player {
             ctx.send_msg(ClientMessage::PlayerUpdate(PlayerState {
                 pos: Vec2::new(self.pos.x, self.pos.z),
                 rot: self.rot.y,
+                track_pos: self.track_pos,
             }));
         }
     }
@@ -264,18 +285,26 @@ impl AsRef<Transform> for Player {
 pub struct ExternalPlayer {
     billboard: Billboard,
     name: String,
+
+    track_pos: TrackPosition,
 }
 
 impl ExternalPlayer {
     pub fn new(ctx: &CreateContext, name: String, transform: Transform) -> Self {
         let billboard = load_player(ctx, transform);
 
-        Self { billboard, name }
+        Self {
+            billboard,
+            name,
+
+            track_pos: TrackPosition::default(),
+        }
     }
 
     pub fn update_state(&mut self, state: PlayerState) {
         self.pos = Vec3::new(state.pos.x, 0.0, state.pos.y);
         self.rot = Rotation::new(0.0, state.rot, 0.0);
+        self.track_pos = state.track_pos;
     }
 }
 

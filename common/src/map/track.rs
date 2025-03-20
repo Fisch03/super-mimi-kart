@@ -28,6 +28,13 @@ pub struct TrackStartIter<'a> {
     center_distance: f32,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct TrackPosition {
+    pub lap: usize,
+    pub segment: usize,
+    pub progress: f32,
+}
+
 impl Track {
     pub fn iter_starts(&self) -> impl Iterator<Item = Vec2> + '_ {
         TrackStartIter::new(self)
@@ -54,6 +61,54 @@ impl Track {
         for point in &mut self.path {
             *point = point.to_rounded();
         }
+    }
+
+    pub fn calc_position(&self, old_pos: Vec2, new_pos: Vec2, track_pos: &mut TrackPosition) {
+        fn intersect(a: &Segment, b: &Segment) -> bool {
+            let det = (a.end.x - a.start.x) * (b.end.y - b.start.y)
+                - (b.end.x - b.start.x) * (a.end.y - a.start.y);
+
+            if det == 0.0 {
+                return false;
+            }
+
+            let lambda = ((b.end.y - b.start.y) * (b.end.x - a.start.x)
+                + (b.start.x - b.end.x) * (b.end.y - a.start.y))
+                / det;
+            let gamma = ((a.start.y - a.end.y) * (b.end.x - a.start.x)
+                + (a.end.x - a.start.x) * (b.end.y - a.start.y))
+                / det;
+
+            return (0.0 < lambda && lambda < 1.0) && (0.0 < gamma && gamma < 1.0);
+        }
+
+        let move_segment = Segment::new(old_pos, new_pos);
+
+        // advance checkpoints until we find one that doesn't intersect
+        for _ in 0..self.path.len() {
+            let (left, right) = self.path[track_pos.segment].checkpoint_positions();
+            let checkpoint_segment = Segment::new(left, right);
+
+            if !intersect(&move_segment, &checkpoint_segment) {
+                break;
+            }
+
+            track_pos.segment = (track_pos.segment + 1) % self.path.len();
+            if track_pos.segment == 1 {
+                track_pos.lap += 1;
+            }
+        }
+
+        let track_segment =
+            self.segment((track_pos.segment + self.path.len() - 1) % self.path.len());
+
+        // project the new position onto the track segment
+        let ab = track_segment.end - track_segment.start;
+        let ac = new_pos - track_segment.start;
+        let ad = ab * (ab.dot(ac) / ab.dot(ab));
+        let projected = track_segment.start + ad;
+
+        track_pos.progress = track_segment.start.distance(projected) / track_segment.length();
     }
 }
 
@@ -165,5 +220,20 @@ impl<'a> Iterator for TrackStartIter<'a> {
                 return Some(p + normal * side * self.center_distance);
             }
         }
+    }
+}
+
+impl std::cmp::Eq for TrackPosition {}
+
+impl std::cmp::Ord for TrackPosition {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.lap
+            .cmp(&other.lap)
+            .then_with(|| self.segment.cmp(&other.segment))
+            .then_with(|| {
+                self.progress
+                    .partial_cmp(&other.progress)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
     }
 }
