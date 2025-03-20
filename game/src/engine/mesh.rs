@@ -3,7 +3,7 @@ use glow::*;
 use crate::engine::{
     CreateContext, RenderContext,
     cache::SheetRef,
-    sprite::{SpriteSheet, SpriteSheetUniforms},
+    sprite::SpriteSheetUniforms,
 };
 
 #[derive(bytemuck::Pod, bytemuck::Zeroable, Clone, Copy)]

@@ -34,13 +34,18 @@ fn load_player(ctx: &CreateContext, transform: Transform) -> Billboard {
 pub struct Player {
     billboard: Billboard,
 
+    physical_pos: Vec2,
+    physical_rot: f32,
+
     track_pos: TrackPosition,
     place: usize,
 
     input: Vec2,
     velocity: Vec2,
 
+    offroad_since: Option<f64>,
     drift_state: DriftState,
+    jump_progress: f32,
 
     coins: u32,
 
@@ -48,19 +53,60 @@ pub struct Player {
     collider: Ball,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum DriftState {
     None,
+    Offroad,
+    Queued(f32), // time in s before queue is cancelled
     Left,
     Right,
 }
 
+impl DriftState {
+    fn update(&mut self, dt: f32) {
+        match self {
+            DriftState::Queued(time) => {
+                *time -= dt;
+                if *time <= 0.0 {
+                    *self = DriftState::None;
+                }
+            }
+            DriftState::None | DriftState::Offroad => {}
+            DriftState::Left | DriftState::Right => {}
+        }
+    }
+
+    fn is_drifting(&self) -> bool {
+        match self {
+            DriftState::Left | DriftState::Right => true,
+            DriftState::None | DriftState::Queued(_) | DriftState::Offroad => false,
+        }
+    }
+
+    fn as_multiplier(&self) -> f32 {
+        match self {
+            DriftState::Left => -1.0,
+            DriftState::Right => 1.0,
+            DriftState::None | DriftState::Queued(_) | DriftState::Offroad => 0.0,
+        }
+    }
+}
+
 impl Player {
-    pub fn new(ctx: &CreateContext, place: usize, transform: Transform) -> Self {
+    pub fn new(ctx: &CreateContext, place: usize, pos: Vec2) -> Self {
+        let mut transform = Transform::new();
+        transform.rot.y = 270.0; // TODO: load from map
+        transform.pos = Vec3::new(pos.x, 0.0, pos.y);
+
+        transform.rot.y += 360.0 * 50.0; // hack for broken rotation offset at negative values
+        let physical_rot = transform.rot.y;
+        let camera_angle = transform.rot.y - 270.0;
         let billboard = load_player(ctx, transform);
 
         Self {
             billboard,
+            physical_rot,
+            physical_pos: pos,
 
             track_pos: TrackPosition::default(),
             place,
@@ -70,9 +116,11 @@ impl Player {
 
             coins: 0,
 
+            offroad_since: None,
             drift_state: DriftState::None,
+            jump_progress: 1.0,
 
-            camera_angle: 0.0,
+            camera_angle,
             collider: Ball::new(5.0),
         }
     }
@@ -91,9 +139,8 @@ impl Player {
             .count()
             + 1;
 
-        let pos_2d = Vec2::new(self.pos.x, self.pos.z);
         for (index, coin) in coins.iter().enumerate().filter(|(_, coin)| coin.state) {
-            if coin.pos().distance(pos_2d) < 1.0 {
+            if coin.pos().distance(self.physical_pos) < 0.6 {
                 ctx.send_msg(ClientMessage::PickUp {
                     kind: PickupKind::Coin,
                     index,
@@ -106,7 +153,7 @@ impl Player {
             .enumerate()
             .filter(|(_, item_box)| item_box.state)
         {
-            if item_box.pos().distance(pos_2d) < 1.0 {
+            if item_box.pos().distance(self.physical_pos) < 0.6 {
                 ctx.send_msg(ClientMessage::PickUp {
                     kind: PickupKind::ItemBox,
                     index,
@@ -126,8 +173,10 @@ impl Player {
         // );
         // let camera_shift = camera_right * rot_diff * 0.005;
 
+        self.pos -= camera_forward * 0.5;
+
         cam.transform.pos =
-            self.pos - camera_forward * 3.0 + Vec3::new(0.0, 1.0, 0.0) /* + camera_shift */;
+            Vec3::new(self.physical_pos.x, 0.0, self.physical_pos.y) - camera_forward * 3.0 + Vec3::new(0.0, 1.0, 0.0) /* + camera_shift */;
         cam.transform.rot = Rotation::new(-5.0, self.camera_angle, self.rot.z);
         cam.set_fov(60.0 + self.velocity.y * 0.3);
     }
@@ -138,9 +187,33 @@ impl Player {
             "KeyS" => self.input.y = -0.5,
             "KeyA" => {
                 self.input.x = -1.0;
+                if matches!(self.drift_state, DriftState::Queued(_)) {
+                    self.jump_progress = 0.0;
+                    self.drift_state = DriftState::Left;
+                }
             }
             "KeyD" => {
                 self.input.x = 1.0;
+                if matches!(self.drift_state, DriftState::Queued(_)) {
+                    self.jump_progress = 0.0;
+                    self.drift_state = DriftState::Right;
+                }
+            }
+
+            "ShiftLeft" if self.drift_state != DriftState::Offroad => {
+                self.drift_state = if self.input.x < 0.0 {
+                    self.jump_progress = 0.0;
+                    DriftState::Left
+                } else if self.input.x > 0.0 {
+                    self.jump_progress = 0.0;
+                    DriftState::Right
+                } else {
+                    DriftState::Queued(0.1)
+                }
+            }
+
+            "ShiftLeft" if self.drift_state == DriftState::Offroad => {
+                self.jump_progress = 0.0;
             }
 
             _ => {}
@@ -169,6 +242,10 @@ impl Player {
                 }
             }
 
+            "ShiftLeft" => {
+                self.drift_state = DriftState::None;
+            }
+
             _ => {}
         }
     }
@@ -179,36 +256,51 @@ impl Object for Player {
         const MOVE_ACCEL: f32 = 15.0;
         const STEER_ACCEL: f32 = 50.0;
 
+        const DRIFT_ACCEL: f32 = 65.0;
+
         let mut move_accel = self.input.y * MOVE_ACCEL;
-        let steer_accel = self.input.x * STEER_ACCEL;
+        let mut steer_accel = self.input.x * STEER_ACCEL;
 
         // offroad
-        let pos_map = ctx.world_coord_to_map(Vec2::new(self.pos.x, self.pos.z));
+        let pos_map = ctx.world_coord_to_map(Vec2::new(self.physical_pos.x, self.physical_pos.y));
         let pos_map = Point2::new(pos_map.x, pos_map.y);
-        if ctx
+        let offroad = ctx
             .offroad
             .iter()
-            .any(|offroad| point_in_poly2d(&pos_map, &offroad.0))
-        {
+            .any(|offroad| point_in_poly2d(&pos_map, &offroad.0));
+
+        if offroad {
             move_accel *= 0.5;
+
+            self.offroad_since = Some(self.offroad_since.unwrap_or(ctx.time()));
+            if ctx.time() - self.offroad_since.unwrap() > 100.0 {
+                self.drift_state = DriftState::Offroad;
+            }
+        } else {
+            self.offroad_since = None;
+            if self.drift_state == DriftState::Offroad {
+                self.drift_state = DriftState::None;
+            }
         }
+
+        self.drift_state.update(ctx.dt);
+        steer_accel += self.drift_state.as_multiplier() * DRIFT_ACCEL;
 
         // TODO: use smooth_step for movement but thats broken rn
         self.velocity.y = f32::lerp(self.velocity.y, move_accel, ctx.dt * 2.0);
-        self.velocity.x = f32::lerp(self.velocity.x, steer_accel, ctx.dt * 3.0);
+        self.velocity.x = f32::lerp(self.velocity.x, steer_accel, ctx.dt * 4.0);
 
-        let forward = Vec3::new(
-            self.rot.y.to_radians().cos(),
-            0.0,
-            self.rot.y.to_radians().sin(),
+        let forward = Vec2::new(
+            self.physical_rot.to_radians().cos(),
+            self.physical_rot.to_radians().sin(),
         );
 
-        let mut new_pos = self.pos + forward * self.velocity.y * ctx.dt;
-        let new_rot = self.rot + Rotation::new(0.0, self.velocity.x * ctx.dt, 0.0);
+        let mut new_pos = self.physical_pos + forward * self.velocity.y * ctx.dt;
+        let new_rot = self.physical_rot + self.velocity.x * ctx.dt;
 
         // collision
         let collider_pos = Isometry::new(nalgebra::zero(), 0.0);
-        let new_pos_map = ctx.world_coord_to_map(Vec2::new(new_pos.x, new_pos.z));
+        let new_pos_map = ctx.world_coord_to_map(new_pos);
         let own_pos = Isometry::new(Vector::new(new_pos_map.x, new_pos_map.y), 0.0);
         for collider in ctx.colliders {
             use parry2d::query;
@@ -222,36 +314,44 @@ impl Object for Player {
                 let translation_map =
                     Vec2::new(contact.normal2.x, contact.normal2.y) * contact.dist;
                 let translation = ctx.map_coord_to_world(translation_map);
-                new_pos = Vec3::new(
-                    new_pos.x - translation.x,
-                    new_pos.y,
-                    new_pos.z - translation.y,
-                );
-
+                new_pos = new_pos - translation;
                 self.velocity.y = 0.0;
             }
         }
 
-        let old_pos_map = ctx.world_coord_to_map(Vec2::new(self.pos.x, self.pos.z));
+        let old_pos_map =
+            ctx.world_coord_to_map(Vec2::new(self.physical_pos.x, self.physical_pos.y));
 
         ctx.map
             .track
             .calc_position(old_pos_map, new_pos_map, &mut self.track_pos);
 
-        self.pos = new_pos;
-        self.rot = new_rot;
+        self.physical_pos = new_pos;
+        self.physical_rot = new_rot;
+
+        self.jump_progress += ctx.dt * 5.0;
+        self.jump_progress = self.jump_progress.min(1.0);
+
+        let jump_height = f32::sin(self.jump_progress * std::f32::consts::PI) * 0.15;
+        self.pos = Vec3::new(self.physical_pos.x, jump_height, self.physical_pos.y);
+
+        let target_rot =
+            self.physical_rot + self.drift_state.as_multiplier() * 75.0 + self.input.x * 15.0;
+        self.rot.y = f32::lerp(self.rot.y, target_rot, ctx.dt * 5.0);
 
         // camera
-        let rot_diff = self.rot.y - self.camera_angle;
-        self.camera_angle = self.camera_angle + 0.02 * rot_diff;
-        // self.camera_angle = self.rot.y;
+        let target = self.physical_rot + self.drift_state.as_multiplier() * 5.0;
+        self.camera_angle = f32::lerp(self.camera_angle, target, ctx.dt * 5.0);
+        // self.camera_angle = self.physical_rot.y;
         // self.camera_angle += ctx.dt * 40.0;
 
         // net
         if ctx.tick {
             ctx.send_msg(ClientMessage::PlayerUpdate(PlayerState {
-                pos: Vec2::new(self.pos.x, self.pos.z),
-                rot: self.rot.y,
+                pos: self.physical_pos,
+                rot: self.physical_rot,
+
+                jump_height,
                 track_pos: self.track_pos,
             }));
         }
@@ -302,7 +402,7 @@ impl ExternalPlayer {
     }
 
     pub fn update_state(&mut self, state: PlayerState) {
-        self.pos = Vec3::new(state.pos.x, 0.0, state.pos.y);
+        self.pos = Vec3::new(state.pos.x, state.jump_height, state.pos.y);
         self.rot = Rotation::new(0.0, state.rot, 0.0);
         self.track_pos = state.track_pos;
     }

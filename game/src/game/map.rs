@@ -25,20 +25,14 @@ pub trait MapToScene {
 impl MapToScene for Map {
     fn to_scene(&self, ctx: &CreateContext, viewport: Vec2, params: &RoundInitParams) -> Scene {
         use crate::game::objects;
-        let mut objects: Vec<Box<dyn Object>> = Vec::new();
+        let objects: Vec<Box<dyn Object>> = Vec::new();
 
         let map_image = &self.assets()[self.background.unwrap()].image;
         let map = objects::Map::new(ctx, &map_image);
 
         let player_start = self.track.iter_starts().nth(params.start_pos).unwrap();
         let player_start = map.map_coord_to_world(player_start);
-        let player = objects::Player::new(
-            ctx,
-            params.start_pos,
-            Transform::new()
-                .position(player_start.x, 0.0, player_start.y)
-                .rotation(0.0, 270.0, 0.0),
-        );
+        let player = objects::Player::new(ctx, params.start_pos, player_start);
 
         let players = params
             .players
@@ -97,11 +91,7 @@ impl MapToScene for Map {
             .iter()
             .map(|c| {
                 let pos = map.map_coord_to_world(*c);
-                objects::Coin::new(
-                    ctx,
-                    coin_texture,
-                    Transform::new().position(pos.x, 0.25, pos.y),
-                )
+                objects::Coin::new(ctx, coin_texture, pos)
             })
             .collect();
 
@@ -111,17 +101,9 @@ impl MapToScene for Map {
             .iter()
             .map(|c| {
                 let pos = map.map_coord_to_world(*c);
-                objects::ItemBox::new(
-                    ctx,
-                    item_box_texture,
-                    Transform::new()
-                        .position(pos.x, 0.30, pos.y)
-                        .scale(0.35, 0.35, 0.35),
-                )
+                objects::ItemBox::new(ctx, item_box_texture, pos)
             })
             .collect();
-
-        objects.push(Box::new(map));
 
         Scene {
             own_id: params.client_id,
@@ -134,6 +116,8 @@ impl MapToScene for Map {
 
             item_boxes,
             coins,
+
+            map,
 
             static_objects: objects,
 

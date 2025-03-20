@@ -95,6 +95,7 @@ pub struct PlayerState {
     pub pos: Vec2,
     pub rot: f32,
     pub track_pos: TrackPosition,
+    pub jump_height: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

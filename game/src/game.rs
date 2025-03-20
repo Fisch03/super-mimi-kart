@@ -34,7 +34,10 @@ struct Scene {
     coins: Vec<objects::Coin>,
     item_boxes: Vec<objects::ItemBox>,
 
+    map: objects::Map,
+
     static_objects: Vec<Box<dyn Object>>,
+
     map_dimensions: Vec2,
 }
 
@@ -304,6 +307,9 @@ impl Game {
 
                 // sort by depth
                 depth_objects.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+                // render
+                scene.map.render(&ctx); // map is always at the back
                 for (o, _) in depth_objects {
                     o.render(&ctx);
                 }

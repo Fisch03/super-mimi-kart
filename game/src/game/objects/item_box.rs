@@ -17,7 +17,7 @@ pub struct ItemBox {
 }
 
 impl ItemBox {
-    pub fn new(ctx: &CreateContext, texture: &DynamicImage, transform: Transform) -> Self {
+    pub fn new(ctx: &CreateContext, texture: &DynamicImage, pos: Vec2) -> Self {
         let sheet = ctx
             .assets
             .load_sheet("item_box", || SpriteSheet::from_images(ctx.gl, &[texture]));
@@ -25,6 +25,10 @@ impl ItemBox {
         let mesh = ctx
             .assets
             .load_mesh("item_box", || Mesh::new(ctx, MeshData::CUBE, sheet));
+
+        let mut transform = Transform::new();
+        transform.pos = Vec3::new(pos.x, 0.1, pos.y);
+        transform.scale_uniform(0.3);
 
         Self {
             transform,
