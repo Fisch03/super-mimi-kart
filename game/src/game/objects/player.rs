@@ -4,7 +4,10 @@ use crate::engine::{
     sprite::{Billboard, SpriteSheet},
 };
 use crate::game::objects::{Coin, ItemBox};
-use common::{ClientId, ClientMessage, PickupKind, PlayerState, map::TrackPosition, types::*};
+use common::{
+    ActiveItemKind, ClientId, ClientMessage, ItemKind, PickupKind, PlayerState, map::TrackPosition,
+    types::*,
+};
 use std::collections::HashMap;
 
 use nalgebra::Point2;
@@ -48,6 +51,8 @@ pub struct Player {
     jump_progress: f32,
 
     coins: u32,
+    use_item: bool,
+    item: Option<ItemKind>,
 
     camera_angle: f32,
     collider: Ball,
@@ -115,6 +120,8 @@ impl Player {
             velocity: Vec2::new(0.0, 0.0),
 
             coins: 0,
+            use_item: false,
+            item: None,
 
             offroad_since: None,
             drift_state: DriftState::None,
@@ -154,6 +161,18 @@ impl Player {
             .filter(|(_, item_box)| item_box.state)
         {
             if item_box.pos().distance(self.physical_pos) < 0.6 {
+                if self.item.is_none() {
+                    use rand::seq::IndexedRandom;
+
+                    let items = [
+                        ItemKind::GreenShell,
+                        ItemKind::RedShell,
+                        ItemKind::Boost,
+                        ItemKind::Banana,
+                    ];
+
+                    self.item = Some(*items.choose(ctx.rng).unwrap());
+                }
                 ctx.send_msg(ClientMessage::PickUp {
                     kind: PickupKind::ItemBox,
                     index,
@@ -200,6 +219,8 @@ impl Player {
                 }
             }
 
+            "Space" => self.use_item = true,
+
             "ShiftLeft" if self.drift_state != DriftState::Offroad => {
                 self.drift_state = if self.input.x < 0.0 {
                     self.jump_progress = 0.0;
@@ -211,7 +232,6 @@ impl Player {
                     DriftState::Queued(0.1)
                 }
             }
-
             "ShiftLeft" if self.drift_state == DriftState::Offroad => {
                 self.jump_progress = 0.0;
             }
@@ -354,6 +374,38 @@ impl Object for Player {
                 jump_height,
                 track_pos: self.track_pos,
             }));
+        }
+
+        if self.use_item {
+            if let Some(item) = self.item.take() {
+                log::info!("use item: {:?}", item);
+                let active_item = match item {
+                    ItemKind::Boost => {
+                        self.velocity.y += 20.0;
+                        None
+                    }
+
+                    ItemKind::Banana => Some(ActiveItemKind::Banana),
+                    ItemKind::RedShell => Some(ActiveItemKind::RedShell {
+                        target: ClientId::invalid(), // will be set by server
+                        velocity: Vec2::new(
+                            self.physical_rot.to_radians().cos(),
+                            self.physical_rot.to_radians().sin(),
+                        ),
+                    }),
+                    ItemKind::GreenShell => Some(ActiveItemKind::GreenShell {
+                        direction: Vec2::new(
+                            self.physical_rot.to_radians().cos(),
+                            self.physical_rot.to_radians().sin(),
+                        ),
+                    }),
+                };
+
+                if let Some(active_item) = active_item {
+                    ctx.send_msg(ClientMessage::UseItem(active_item));
+                }
+            }
+            self.use_item = false;
         }
     }
 

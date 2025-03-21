@@ -1,4 +1,7 @@
-use image::GenericImageView;
+use image::{
+    GenericImageView,
+    codecs::png::{CompressionType, FilterType, PngEncoder},
+};
 use serde::{Deserialize, Serialize};
 use std::io::{Cursor, Read, Write};
 use thiserror::Error;
@@ -52,7 +55,11 @@ impl Asset {
         let mut data = Vec::new();
         let mut cursor = Cursor::new(&mut data);
         self.image
-            .write_to(&mut cursor, image::ImageFormat::Png)
+            .write_with_encoder(PngEncoder::new_with_quality(
+                &mut cursor,
+                CompressionType::Best,
+                FilterType::NoFilter,
+            ))
             .unwrap();
         writer.write_all(&data).unwrap();
     }

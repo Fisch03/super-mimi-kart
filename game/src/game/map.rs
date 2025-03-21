@@ -2,6 +2,7 @@ use super::Scene;
 use crate::engine::{
     Camera, CreateContext,
     object::{Object, Transform},
+    sprite::Skybox,
 };
 use common::{RoundInitParams, map::*, types::*};
 use nalgebra::Point2;
@@ -106,6 +107,9 @@ impl MapToScene for Map {
             .collect();
 
         Scene {
+            cam,
+            skybox: Skybox::load(ctx, "skybox"),
+
             own_id: params.client_id,
 
             player,
@@ -121,7 +125,6 @@ impl MapToScene for Map {
 
             static_objects: objects,
 
-            cam,
             map_dimensions: Vec2::new(map_image.width() as f32, map_image.height() as f32),
         }
     }

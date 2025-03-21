@@ -67,6 +67,15 @@ impl Camera {
         Mat4::look_to_rh(self.transform.pos, direction, Vec3::new(0.0, 1.0, 0.0))
     }
 
+    pub fn view_no_translation(&self) -> Mat4 {
+        let direction = Vec3::new(
+            self.transform.rot.x.to_radians().cos() * self.transform.rot.y.to_radians().cos(),
+            self.transform.rot.x.to_radians().sin(),
+            self.transform.rot.x.to_radians().cos() * self.transform.rot.y.to_radians().sin(),
+        );
+        Mat4::look_to_rh(Vec3::ZERO, direction, Vec3::new(0.0, 1.0, 0.0))
+    }
+
     pub fn bind(&self, gl: &Context, uniforms: &CameraUniforms) {
         unsafe {
             gl.uniform_matrix_4_f32_slice(Some(&uniforms.proj), false, &self.proj.to_cols_array());
@@ -74,6 +83,17 @@ impl Camera {
                 Some(&uniforms.view),
                 false,
                 &self.view().to_cols_array(),
+            );
+        }
+    }
+
+    pub fn bind_no_tranlation(&self, gl: &Context, uniforms: &CameraUniforms) {
+        unsafe {
+            gl.uniform_matrix_4_f32_slice(Some(&uniforms.proj), false, &self.proj.to_cols_array());
+            gl.uniform_matrix_4_f32_slice(
+                Some(&uniforms.view),
+                false,
+                &self.view_no_translation().to_cols_array(),
             );
         }
     }

@@ -123,7 +123,7 @@ pub struct ActiveItem {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ActiveItemKind {
     GreenShell { direction: Vec2 },
-    RedShell { target: ClientId },
+    RedShell { target: ClientId, velocity: Vec2 },
     Banana,
 }
 

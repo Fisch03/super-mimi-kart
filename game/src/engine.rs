@@ -22,6 +22,13 @@ pub struct CreateContext<'a> {
     pub assets: &'a AssetCache,
 }
 
+impl std::ops::Deref for CreateContext<'_> {
+    type Target = glow::Context;
+    fn deref(&self) -> &Self::Target {
+        self.gl
+    }
+}
+
 impl AsRef<AssetCache> for CreateContext<'_> {
     fn as_ref(&self) -> &AssetCache {
         self.assets
@@ -53,6 +60,8 @@ pub struct UpdateContext<'a> {
     pub tick: bool,
     pub send_msg: &'a mut dyn FnMut(ClientMessage),
     pub assets: &'a AssetCache,
+
+    pub rng: &'a mut rand::rngs::SmallRng,
 
     pub map: &'a Map,
 

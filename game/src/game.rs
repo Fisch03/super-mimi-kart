@@ -5,7 +5,8 @@ use std::sync::mpsc;
 use web_sys::WebSocket;
 
 use crate::engine::{
-    Camera, CreateContext, RenderContext, Shaders, UpdateContext, cache::AssetCache, object::Object,
+    Camera, CreateContext, RenderContext, Shaders, UpdateContext, cache::AssetCache,
+    object::Object, sprite::Skybox,
 };
 
 mod map;
@@ -35,6 +36,7 @@ struct Scene {
     item_boxes: Vec<objects::ItemBox>,
 
     map: objects::Map,
+    skybox: Skybox,
 
     static_objects: Vec<Box<dyn Object>>,
 
@@ -59,6 +61,8 @@ pub struct Game {
     shaders: Shaders,
     viewport: Vec2,
 
+    rng: rand::rngs::SmallRng,
+
     cache: AssetCache,
     state: State,
 }
@@ -81,6 +85,10 @@ impl Game {
 
         // let map_download = MapDownload::start("maps/mcircuit/mcircuit.smk".to_string());
 
+        use rand::SeedableRng;
+        let seed = [0; 32];
+        let rng = rand::rngs::SmallRng::from_seed(seed);
+
         Self {
             ws,
             ws_rx,
@@ -88,6 +96,8 @@ impl Game {
             cache: Default::default(),
             shaders,
             viewport,
+
+            rng,
 
             state: State::WaitingToJoin,
         }
@@ -168,13 +178,17 @@ impl Game {
                     self.state = State::Running { map, scene };
                 }
 
-                ServerMessage::RaceUpdate { players, .. }
-                    if matches!(self.state, State::Running { .. }) =>
-                {
+                ServerMessage::RaceUpdate {
+                    players,
+                    active_items,
+                    ..
+                } if matches!(self.state, State::Running { .. }) => {
                     let scene = match &mut self.state {
                         State::Running { scene, .. } => scene,
                         _ => unreachable!(),
                     };
+
+                    log::info!("{:?}", active_items);
 
                     for (id, state) in players {
                         if let Some(player) = scene.players.get_mut(&id) {
@@ -230,6 +244,8 @@ impl Game {
 
                     colliders: &scene.colliders,
                     offroad: &scene.offroad,
+
+                    rng: &mut self.rng,
                 };
 
                 scene
@@ -309,6 +325,7 @@ impl Game {
                 depth_objects.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
                 // render
+                scene.skybox.render(&ctx);
                 scene.map.render(&ctx); // map is always at the back
                 for (o, _) in depth_objects {
                     o.render(&ctx);

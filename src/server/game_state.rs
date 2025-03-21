@@ -8,6 +8,8 @@ const SHELL_SPEED: f32 = 0.2;
 
 #[derive(Debug, Default)]
 pub struct GameState {
+    map: Map,
+
     active_items: Vec<ActiveItem>,
     coin_states: Vec<bool>,
     item_box_states: Vec<bool>,
@@ -22,13 +24,69 @@ impl GameState {
         let coin_states = vec![true; map.coins.len()];
         let item_box_states = vec![true; map.item_spawns.len()];
         Self {
+            map,
+
             active_items: Vec::new(),
             coin_states,
             item_box_states,
         }
     }
 
-    pub fn add_item(&mut self, item: ActiveItem) {
+    pub fn add_item(
+        &mut self,
+        mut item: ActiveItem,
+        client: &Client,
+        clients: &HashMap<ClientId, Client>,
+    ) {
+        match &mut item.kind {
+            ActiveItemKind::RedShell { target, .. } => {
+                let start_pos = client.state.track_pos;
+                struct Nearest {
+                    id: ClientId,
+                    distance_segments: usize,
+                    distance_progress: f32,
+                }
+                let mut nearest_found: Option<Nearest> = None;
+
+                for (id, other) in clients {
+                    if *id == client.id() {
+                        continue;
+                    }
+
+                    let mut target_segment = other.state.track_pos.segment;
+                    if target_segment < start_pos.segment
+                        || start_pos.progress > other.state.track_pos.progress
+                    {
+                        target_segment += self.map.track.path.len()
+                    }
+                    let segment_diff = target_segment - start_pos.segment;
+                    let progress_diff = other.state.track_pos.progress - start_pos.progress;
+
+                    let candidate = Nearest {
+                        id: *id,
+                        distance_segments: segment_diff,
+                        distance_progress: progress_diff,
+                    };
+
+                    if let Some(ref nearest) = nearest_found {
+                        if candidate.distance_segments < nearest.distance_segments
+                            || (candidate.distance_segments == nearest.distance_segments
+                                && candidate.distance_progress < nearest.distance_progress)
+                        {
+                            nearest_found = Some(candidate);
+                        }
+                    } else {
+                        nearest_found = Some(candidate);
+                    }
+                }
+
+                *target = nearest_found.map(|n| n.id).unwrap_or(ClientId::invalid());
+            }
+
+            ActiveItemKind::GreenShell { .. } => {}
+            ActiveItemKind::Banana => {}
+        }
+
         self.active_items.push(item);
     }
 
@@ -73,17 +131,24 @@ impl GameState {
             let mut remove = false;
 
             let item = &mut self.active_items[i];
-            match item.kind {
+            match &mut item.kind {
                 ActiveItemKind::GreenShell { direction } => {
-                    item.pos += direction * SHELL_SPEED;
+                    item.pos += *direction * SHELL_SPEED;
                 }
 
-                ActiveItemKind::RedShell { target } => {
-                    if let Some(target) = players.get(&target) {
+                ActiveItemKind::RedShell { target, velocity } => {
+                    if *target == ClientId::invalid() {
+                        item.pos += *velocity;
+                    } else if let Some(target) = players.get(&target) {
+                        // TODO: follow track until we get close enough
+
                         let target_pos = target.state.pos;
                         let direction = target_pos - item.pos;
-                        let direction = direction.normalize() * SHELL_SPEED;
-                        item.pos += direction;
+                        let target_velocity = direction.normalize() * SHELL_SPEED;
+                        let acceleration = (target_velocity - *velocity) * 0.1;
+                        *velocity += acceleration;
+
+                        item.pos += *velocity;
                     } else {
                         remove = true;
                     }
@@ -102,12 +167,11 @@ impl GameState {
                     }
                 }
 
-                ActiveItemKind::RedShell { target } => {
+                ActiveItemKind::RedShell { target, .. } => {
                     if let Some(target) = players.get(&target) {
                         if (target.state.pos - item.pos).length() < 0.1 {
                             notify_hit(&client_handler, target.id()).await;
                             remove = true;
-                            self.active_items.swap_remove(i);
                         }
                     }
                 }

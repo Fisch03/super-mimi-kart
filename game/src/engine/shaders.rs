@@ -1,14 +1,16 @@
 use glow::*;
-use include_dir::{include_dir, Dir};
+use include_dir::{Dir, include_dir};
 
 static SHADERS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/src/engine/shaders");
 
+mod skybox;
 mod unlit;
 
 #[derive(Debug)]
 pub struct Shaders {
     pub unlit: unlit::UnlitShader,
     pub billboard: unlit::BillboardShader,
+    pub skybox: skybox::SkyboxShader,
 }
 
 impl Shaders {
@@ -16,6 +18,7 @@ impl Shaders {
         Self {
             unlit: unlit::UnlitShader::new(gl),
             billboard: unlit::BillboardShader::new(gl),
+            skybox: skybox::SkyboxShader::new(gl),
         }
     }
 }
