@@ -1,5 +1,4 @@
-use super::SPRITE_ASSETS;
-use crate::engine::{CreateContext, RenderContext};
+use crate::engine::{ASSETS, CreateContext, RenderContext};
 
 use glow::*;
 
@@ -59,7 +58,7 @@ pub struct Skybox {
 
 impl Skybox {
     pub fn load(ctx: &CreateContext, asset: &str) -> Self {
-        let dir = SPRITE_ASSETS.get_dir(asset).unwrap();
+        let dir = ASSETS.get_dir(asset).unwrap();
 
         let texture = unsafe { ctx.create_texture().unwrap() };
         unsafe { ctx.bind_texture(glow::TEXTURE_CUBE_MAP, Some(texture)) };

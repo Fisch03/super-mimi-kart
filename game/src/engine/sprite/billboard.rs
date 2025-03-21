@@ -62,12 +62,13 @@ impl Billboard {
             % (std::f32::consts::PI * 2.0);
 
         let mesh = self.mesh.get();
+        let primitive = mesh.primitives.first().unwrap();
 
-        let sprite_amt = mesh.sprite_ref.get().sprite_amount();
+        let sprite_amt = primitive.sprite_ref.get().sprite_amount();
 
         let sprite_index = (angle / (std::f32::consts::PI * 2.0) * sprite_amt as f32).floor();
 
-        mesh.bind_index(ctx, sprite_sheet_uniforms, sprite_index as u32);
+        primitive.bind_index(ctx, sprite_sheet_uniforms, sprite_index as u32);
 
         // self.mesh.bind(ctx, sprite_sheet_uniforms);
 

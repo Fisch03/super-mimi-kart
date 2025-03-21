@@ -2,8 +2,8 @@ use super::load;
 use crate::engine::{
     RenderContext,
     cam::CameraUniforms,
-    mesh::Mesh,
-    object::Object,
+    mesh::Primitive,
+    object::Transform,
     sprite::{Billboard, SpriteSheetUniforms},
 };
 use glow::*;
@@ -34,16 +34,15 @@ impl UnlitShader {
         }
     }
 
-    pub fn render(&self, ctx: &RenderContext, obj: &dyn Object, mesh: &Mesh) {
-        let obj_transform = obj.as_ref();
+    pub fn render(&self, ctx: &RenderContext, transform: &Transform, primitive: &Primitive) {
         unsafe {
             ctx.use_program(Some(self.program));
 
-            mesh.bind(ctx, &self.sprite_sheet_uniforms);
+            primitive.bind(ctx, &self.sprite_sheet_uniforms);
             ctx.cam.bind(ctx, &self.camera_uniforms);
-            obj_transform.bind(ctx, &self.model_loc);
+            transform.bind(ctx, &self.model_loc);
 
-            ctx.draw_arrays(glow::TRIANGLES, 0, mesh.vert_count() as i32);
+            ctx.draw_arrays(glow::TRIANGLES, 0, primitive.vert_count() as i32);
         }
     }
 }

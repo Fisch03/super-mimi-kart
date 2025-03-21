@@ -50,7 +50,7 @@ impl Object for ItemBox {
 
     fn render(&self, ctx: &RenderContext) {
         if self.state {
-            ctx.shaders.unlit.render(ctx, self, &self.mesh.get());
+            self.mesh.get().render(ctx, &self.transform);
         }
     }
 }

@@ -3,6 +3,9 @@ use crate::game::{
     objects::map::{map_coord_to_world, world_coord_to_map},
 };
 use common::{ClientMessage, map::Map, types::*};
+use include_dir::{Dir, include_dir};
+
+static ASSETS: Dir = include_dir!("$CARGO_MANIFEST_DIR/../assets");
 
 pub mod cache;
 pub use cache::AssetCache;

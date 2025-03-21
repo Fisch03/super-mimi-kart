@@ -61,7 +61,7 @@ impl Map {
 
 impl Object for Map {
     fn render(&self, ctx: &RenderContext) {
-        ctx.shaders.unlit.render(ctx, self, &self.mesh.get());
+        self.mesh.get().render(ctx, &self.transform);
     }
 }
 

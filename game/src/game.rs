@@ -5,8 +5,11 @@ use std::sync::mpsc;
 use web_sys::WebSocket;
 
 use crate::engine::{
-    Camera, CreateContext, RenderContext, Shaders, UpdateContext, cache::AssetCache,
-    object::Object, sprite::Skybox,
+    Camera, CreateContext, RenderContext, Shaders, UpdateContext,
+    cache::{AssetCache, MeshRef},
+    mesh::Mesh,
+    object::Object,
+    sprite::Skybox,
 };
 
 mod map;
@@ -57,11 +60,14 @@ impl std::fmt::Display for State {
 pub struct Game {
     ws: WebSocket,
     ws_rx: mpsc::Receiver<ServerMessage>,
+
     gl: glow::Context,
     shaders: Shaders,
     viewport: Vec2,
 
     rng: rand::rngs::SmallRng,
+
+    chorb: MeshRef,
 
     cache: AssetCache,
     state: State,
@@ -75,13 +81,24 @@ impl Game {
         viewport: Vec2,
     ) -> Self {
         let shaders = Shaders::new(&gl);
+        let cache = AssetCache::default();
 
         unsafe {
             gl.enable(glow::DEPTH_TEST);
             gl.enable(glow::BLEND);
+            gl.enable(glow::CULL_FACE);
             gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
             gl.clear_color(0.0, 0.0, 0.0, 1.0);
         }
+
+        let ctx = CreateContext {
+            gl: &gl,
+            assets: &cache,
+        };
+
+        let chorb = ctx
+            .assets
+            .load_mesh("chorb", || Mesh::load(&ctx, "chorb.glb"));
 
         // let map_download = MapDownload::start("maps/mcircuit/mcircuit.smk".to_string());
 
@@ -93,9 +110,11 @@ impl Game {
             ws,
             ws_rx,
             gl,
-            cache: Default::default(),
+            cache,
             shaders,
             viewport,
+
+            chorb,
 
             rng,
 
@@ -330,6 +349,9 @@ impl Game {
                 for (o, _) in depth_objects {
                     o.render(&ctx);
                 }
+                self.chorb
+                    .get()
+                    .render(&ctx, &crate::engine::object::Transform::new());
             }
             _ => log::warn!("todo: render state {}", self.state),
         }

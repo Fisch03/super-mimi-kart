@@ -1,4 +1,4 @@
-use super::SPRITE_ASSETS;
+use crate::engine::ASSETS;
 use common::types::*;
 use glow::*;
 use image::{DynamicImage, GenericImage, GenericImageView, ImageBuffer};
@@ -41,14 +41,14 @@ impl SpriteSheet {
     }
 
     pub fn load_single(gl: &Context, asset: &str) -> Self {
-        let map_tex = SPRITE_ASSETS.get_file(asset).unwrap().contents();
+        let map_tex = ASSETS.get_file(asset).unwrap().contents();
         let map_img = image::load_from_memory(map_tex).unwrap();
 
         Self::from_images(gl, &[&map_img])
     }
 
     pub fn load_multi(gl: &Context, asset: &str) -> Self {
-        let sprite_dir = SPRITE_ASSETS.get_dir(asset).unwrap();
+        let sprite_dir = ASSETS.get_dir(asset).unwrap();
         let mut sprite_imgs = Vec::new();
         for sprite in sprite_dir.files() {
             let sprite_tex = sprite.contents();
