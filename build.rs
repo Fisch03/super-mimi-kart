@@ -4,16 +4,16 @@ use std::{
 };
 
 fn main() {
-    println!("cargo:rerun-if-changed=assets/");
-    print!("cargo:rerun-if-changed=common/");
-    std::fs::remove_dir_all("./static").unwrap_or(());
-    std::fs::create_dir_all("./static/assets").unwrap();
-    copy_dir(Path::new("assets"), Path::new("./static/assets"));
-    std::fs::create_dir_all("./static/maps").unwrap();
-    copy_dir(Path::new("maps"), Path::new("./static/maps"));
-
-    build_wasm_pkg("game/", "./static/game");
-    build_wasm_pkg("editor/", "./static/editor");
+    // println!("cargo:rerun-if-changed=assets/");
+    // print!("cargo:rerun-if-changed=common/");
+    // std::fs::remove_dir_all("./static").unwrap_or(());
+    // std::fs::create_dir_all("./static/assets").unwrap();
+    // copy_dir(Path::new("assets"), Path::new("./static/assets"));
+    // std::fs::create_dir_all("./static/maps").unwrap();
+    // copy_dir(Path::new("maps"), Path::new("./static/maps"));
+    //
+    // build_wasm_pkg("game/", "./static/game");
+    // build_wasm_pkg("editor/", "./static/editor");
 }
 
 fn build_wasm_pkg(in_dir: &str, pkg_out_dir: &str) {

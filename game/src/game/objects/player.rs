@@ -6,7 +6,7 @@ use crate::engine::{
 use crate::game::objects::{Coin, ItemBox};
 use common::{
     ActiveItemKind, ClientId, ClientMessage, ItemKind, PickupKind, PlayerState, map::TrackPosition,
-    types::*,
+    map_coord_to_world, types::*, world_coord_to_map,
 };
 use std::collections::HashMap;
 
@@ -121,7 +121,7 @@ impl Player {
 
             coins: 0,
             use_item: false,
-            item: None,
+            item: Some(ItemKind::RedShell),
 
             offroad_since: None,
             drift_state: DriftState::None,
@@ -282,7 +282,7 @@ impl Object for Player {
         let mut steer_accel = self.input.x * STEER_ACCEL;
 
         // offroad
-        let pos_map = ctx.world_coord_to_map(Vec2::new(self.physical_pos.x, self.physical_pos.y));
+        let pos_map = world_coord_to_map(Vec2::new(self.physical_pos.x, self.physical_pos.y));
         let pos_map = Point2::new(pos_map.x, pos_map.y);
         let offroad = ctx
             .offroad
@@ -320,7 +320,7 @@ impl Object for Player {
 
         // collision
         let collider_pos = Isometry::new(nalgebra::zero(), 0.0);
-        let new_pos_map = ctx.world_coord_to_map(new_pos);
+        let new_pos_map = world_coord_to_map(new_pos);
         let own_pos = Isometry::new(Vector::new(new_pos_map.x, new_pos_map.y), 0.0);
         for collider in ctx.colliders {
             use parry2d::query;
@@ -333,14 +333,13 @@ impl Object for Player {
             ) {
                 let translation_map =
                     Vec2::new(contact.normal2.x, contact.normal2.y) * contact.dist;
-                let translation = ctx.map_coord_to_world(translation_map);
+                let translation = map_coord_to_world(translation_map);
                 new_pos = new_pos - translation;
                 self.velocity.y = 0.0;
             }
         }
 
-        let old_pos_map =
-            ctx.world_coord_to_map(Vec2::new(self.physical_pos.x, self.physical_pos.y));
+        let old_pos_map = world_coord_to_map(Vec2::new(self.physical_pos.x, self.physical_pos.y));
 
         ctx.map
             .track
@@ -378,6 +377,7 @@ impl Object for Player {
 
         if self.use_item {
             if let Some(item) = self.item.take() {
+                log::info!("player {:?}", new_pos);
                 log::info!("use item: {:?}", item);
                 let active_item = match item {
                     ItemKind::Boost => {
@@ -386,24 +386,15 @@ impl Object for Player {
                     }
 
                     ItemKind::Banana => Some(ActiveItemKind::Banana),
-                    ItemKind::RedShell => Some(ActiveItemKind::RedShell {
-                        target: ClientId::invalid(), // will be set by server
-                        velocity: Vec2::new(
-                            self.physical_rot.to_radians().cos(),
-                            self.physical_rot.to_radians().sin(),
-                        ),
-                    }),
-                    ItemKind::GreenShell => Some(ActiveItemKind::GreenShell {
-                        direction: Vec2::new(
-                            self.physical_rot.to_radians().cos(),
-                            self.physical_rot.to_radians().sin(),
-                        ),
-                    }),
+                    ItemKind::RedShell => Some(ActiveItemKind::RedShell { roll: 0.0 }),
+                    ItemKind::GreenShell => Some(ActiveItemKind::GreenShell { roll: 0.0 }),
                 };
 
                 if let Some(active_item) = active_item {
                     ctx.send_msg(ClientMessage::UseItem(active_item));
                 }
+
+                self.item = Some(item);
             }
             self.use_item = false;
         }

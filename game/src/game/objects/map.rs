@@ -5,18 +5,8 @@ use crate::engine::{
     object::{Object, Transform},
     sprite::SpriteSheet,
 };
-use common::types::*;
+use common::{MAP_SCALE, types::*};
 use image::DynamicImage;
-
-pub const MAP_SCALE: f32 = 20.0;
-
-pub fn map_coord_to_world(pos: Vec2) -> Vec2 {
-    (pos / MAP_SCALE) * 2.0
-}
-
-pub fn world_coord_to_map(pos: Vec2) -> Vec2 {
-    (pos / 2.0) * MAP_SCALE
-}
 
 #[derive(Debug)]
 pub struct Map {
@@ -48,14 +38,6 @@ impl Map {
             mesh,
             dimensions,
         }
-    }
-
-    pub fn map_coord_to_world(&self, pos: Vec2) -> Vec2 {
-        map_coord_to_world(pos)
-    }
-
-    pub fn world_coord_to_map(&self, pos: Vec2) -> Vec2 {
-        world_coord_to_map(pos)
     }
 }
 

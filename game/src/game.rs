@@ -5,11 +5,8 @@ use std::sync::mpsc;
 use web_sys::WebSocket;
 
 use crate::engine::{
-    Camera, CreateContext, RenderContext, Shaders, UpdateContext,
-    cache::{AssetCache, MeshRef},
-    mesh::Mesh,
-    object::Object,
-    sprite::Skybox,
+    Camera, CreateContext, RenderContext, Shaders, UpdateContext, cache::AssetCache,
+    object::Object, sprite::Skybox,
 };
 
 mod map;
@@ -20,9 +17,17 @@ pub mod objects;
 #[derive(Debug)]
 enum State {
     WaitingToJoin,
-    Loading { map_download: MapDownload },
-    WaitingToStart { map: Map },
-    Running { scene: Scene, map: Map },
+    Loading {
+        map_download: MapDownload,
+    },
+    WaitingToStart {
+        map: Map,
+    },
+    Running {
+        scene: Scene,
+        map: Map,
+        race_time: f32,
+    },
 }
 
 #[derive(Debug)]
@@ -37,6 +42,7 @@ struct Scene {
 
     coins: Vec<objects::Coin>,
     item_boxes: Vec<objects::ItemBox>,
+    items: Vec<objects::Item>,
 
     map: objects::Map,
     skybox: Skybox,
@@ -67,8 +73,6 @@ pub struct Game {
 
     rng: rand::rngs::SmallRng,
 
-    chorb: MeshRef,
-
     cache: AssetCache,
     state: State,
 }
@@ -91,20 +95,15 @@ impl Game {
             gl.clear_color(0.0, 0.0, 0.0, 1.0);
         }
 
-        let ctx = CreateContext {
-            gl: &gl,
-            assets: &cache,
-        };
-
-        let chorb = ctx
-            .assets
-            .load_mesh("chorb", || Mesh::load(&ctx, "chorb.glb"));
-
-        // let map_download = MapDownload::start("maps/mcircuit/mcircuit.smk".to_string());
+        // let ctx = CreateContext {
+        //     gl: &gl,
+        //     assets: &cache,
+        // };
+        // objects::Item::preload_assets(&ctx);
 
         use rand::SeedableRng;
-        let seed = [0; 32];
-        let rng = rand::rngs::SmallRng::from_seed(seed);
+        let time = web_sys::window().unwrap().performance().unwrap().now();
+        let rng = rand::rngs::SmallRng::seed_from_u64((time * 12345.0) as u64);
 
         Self {
             ws,
@@ -113,8 +112,6 @@ impl Game {
             cache,
             shaders,
             viewport,
-
-            chorb,
 
             rng,
 
@@ -192,22 +189,42 @@ impl Game {
                         gl: &self.gl,
                         assets: &self.cache,
                     };
+                    objects::Item::preload_assets(&ctx);
                     let scene = map.to_scene(&ctx, self.viewport, &params);
 
-                    self.state = State::Running { map, scene };
+                    self.state = State::Running {
+                        map,
+                        scene,
+                        race_time: 0.0,
+                    };
                 }
 
                 ServerMessage::RaceUpdate {
                     players,
                     active_items,
-                    ..
+                    race_time: new_race_time,
                 } if matches!(self.state, State::Running { .. }) => {
                     let scene = match &mut self.state {
-                        State::Running { scene, .. } => scene,
+                        State::Running {
+                            scene, race_time, ..
+                        } => {
+                            *race_time = new_race_time;
+                            scene
+                        }
                         _ => unreachable!(),
                     };
 
-                    log::info!("{:?}", active_items);
+                    let ctx = CreateContext {
+                        gl: &self.gl,
+                        assets: &self.cache,
+                    };
+
+                    scene.items.clear();
+                    scene.items.extend(
+                        active_items
+                            .into_iter()
+                            .map(|i| objects::Item::new(&ctx, i)),
+                    );
 
                     for (id, state) in players {
                         if let Some(player) = scene.players.get_mut(&id) {
@@ -246,7 +263,11 @@ impl Game {
 
         // update
         match &mut self.state {
-            State::Running { scene, map } => {
+            State::Running {
+                scene,
+                map,
+                race_time,
+            } => {
                 let mut ctx = UpdateContext {
                     dt,
                     tick,
@@ -334,6 +355,7 @@ impl Game {
                     .chain(std::iter::once(&scene.player as &dyn Object))
                     .chain(scene.coins.iter().map(|o| o as &dyn Object))
                     .chain(scene.item_boxes.iter().map(|o| o as &dyn Object))
+                    .chain(scene.items.iter().map(|o| o as &dyn Object))
                     .map(|o| {
                         let depth = o.as_ref().camera_depth(&scene.cam);
                         (o, depth)
@@ -349,9 +371,6 @@ impl Game {
                 for (o, _) in depth_objects {
                     o.render(&ctx);
                 }
-                self.chorb
-                    .get()
-                    .render(&ctx, &crate::engine::object::Transform::new());
             }
             _ => log::warn!("todo: render state {}", self.state),
         }

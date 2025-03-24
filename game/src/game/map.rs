@@ -4,7 +4,7 @@ use crate::engine::{
     object::{Object, Transform},
     sprite::Skybox,
 };
-use common::{RoundInitParams, map::*, types::*};
+use common::{RoundInitParams, map::*, map_coord_to_world, types::*, world_coord_to_map};
 use nalgebra::Point2;
 use parry2d::shape::Polyline;
 use poll_promise::Promise;
@@ -32,7 +32,7 @@ impl MapToScene for Map {
         let map = objects::Map::new(ctx, &map_image);
 
         let player_start = self.track.iter_starts().nth(params.start_pos).unwrap();
-        let player_start = map.map_coord_to_world(player_start);
+        let player_start = map_coord_to_world(player_start);
         let player = objects::Player::new(ctx, params.start_pos, player_start);
 
         let players = params
@@ -42,7 +42,7 @@ impl MapToScene for Map {
             .filter(|(i, _)| *i != params.start_pos)
             .map(|(i, (id, name))| {
                 let start = self.track.iter_starts().nth(i).unwrap();
-                let start = map.map_coord_to_world(start);
+                let start = map_coord_to_world(start);
                 (
                     *id,
                     objects::ExternalPlayer::new(
@@ -91,7 +91,7 @@ impl MapToScene for Map {
             .coins
             .iter()
             .map(|c| {
-                let pos = map.map_coord_to_world(*c);
+                let pos = map_coord_to_world(*c);
                 objects::Coin::new(ctx, coin_texture, pos)
             })
             .collect();
@@ -101,7 +101,7 @@ impl MapToScene for Map {
             .item_spawns
             .iter()
             .map(|c| {
-                let pos = map.map_coord_to_world(*c);
+                let pos = map_coord_to_world(*c);
                 objects::ItemBox::new(ctx, item_box_texture, pos)
             })
             .collect();
@@ -120,6 +120,7 @@ impl MapToScene for Map {
 
             item_boxes,
             coins,
+            items: Vec::new(),
 
             map,
 

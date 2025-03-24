@@ -1,7 +1,4 @@
-use common::{
-    ActiveItem, ActiveItemKind, ClientId, ClientMessage, PickupKind, Placement, ServerMessage,
-    map::Map, types::*,
-};
+use common::{ClientId, ClientMessage, PickupKind, Placement, ServerMessage, map::Map};
 use std::collections::HashMap;
 use tokio::{
     sync::{mpsc, oneshot},
@@ -335,7 +332,7 @@ impl ClientManager {
                 .iter()
                 .map(|(&id, client)| (id, client.state.clone()))
                 .collect(),
-            active_items: self.game_state.active_items().to_vec(),
+            active_items: self.game_state.active_items(),
         };
 
         self.send(SendTo::InGameAll, race_update).await;
@@ -404,22 +401,9 @@ impl ClientManager {
                 }
             }
 
-            ClientMessage::UseItem(mut kind) => {
+            ClientMessage::UseItem(kind) => {
                 if let Some(client) = self.clients.get(&id) {
-                    let mut pos = client.state.pos;
-                    let forward = Vec2::new(client.state.rot.cos(), client.state.rot.sin());
-                    match &mut kind {
-                        ActiveItemKind::Banana => {
-                            pos -= forward * 1.0;
-                        }
-
-                        ActiveItemKind::GreenShell { .. } | ActiveItemKind::RedShell { .. } => {
-                            pos += forward * 1.0;
-                        }
-                    }
-
-                    self.game_state
-                        .add_item(ActiveItem { pos, kind }, client, &self.clients)
+                    self.game_state.add_item(kind, client, &self.clients)
                 }
             }
 

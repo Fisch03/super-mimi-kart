@@ -9,3 +9,5 @@ pub use coin::Coin;
 
 mod item_box;
 pub use item_box::ItemBox;
+mod item;
+pub use item::Item;

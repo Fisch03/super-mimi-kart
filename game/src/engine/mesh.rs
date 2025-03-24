@@ -127,7 +127,6 @@ impl Mesh{
         let file = ASSETS.get_file(asset).unwrap();
         let Gltf {document, mut blob}= Gltf::from_slice(file.contents()).unwrap();
 
-        log::info!("{:#?}", document);
 
         let buffers = document.buffers().map(|buffer| {
             match buffer.source() {

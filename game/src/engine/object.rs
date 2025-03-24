@@ -54,6 +54,7 @@ impl Transform {
             ..self
         }
     }
+
     pub fn scale(self, x: f32, y: f32, z: f32) -> Self {
         Self {
             scale: Vec3::new(x, y, z),
@@ -79,8 +80,8 @@ impl Transform {
 
     pub fn model_mat(&self) -> Mat4 {
         Mat4::from_translation(self.pos)
-            * Mat4::from_rotation_x(self.rot.x.to_radians())
             * Mat4::from_rotation_y(self.rot.y.to_radians())
+            * Mat4::from_rotation_x(self.rot.x.to_radians())
             * Mat4::from_rotation_z(self.rot.z.to_radians())
             * Mat4::from_scale(self.scale)
     }

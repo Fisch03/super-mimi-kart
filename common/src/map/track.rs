@@ -63,6 +63,17 @@ impl Track {
         }
     }
 
+    pub fn advance_position(&self, amt: f32, track_pos: &mut TrackPosition) -> Vec2 {
+        let segment = self.segment((track_pos.segment + self.path.len() - 1) % self.path.len());
+        let dir = (segment.end - segment.start).normalize();
+
+        let current_pos = segment.start + dir * segment.length() * track_pos.progress;
+        let new_pos = current_pos + dir * amt;
+        self.calc_position(current_pos, new_pos, track_pos);
+
+        new_pos
+    }
+
     pub fn calc_position(&self, old_pos: Vec2, new_pos: Vec2, track_pos: &mut TrackPosition) {
         fn intersect(a: &Segment, b: &Segment) -> bool {
             let det = (a.end.x - a.start.x) * (b.end.y - b.start.y)

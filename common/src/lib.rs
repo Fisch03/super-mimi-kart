@@ -8,7 +8,15 @@ use types::*;
 pub const TICKS_PER_SECOND: f32 = 60.0;
 pub const COUNTDOWN_DURATION: f32 = 5.0;
 
-pub const SHELL_SPEED: f32 = 0.2;
+pub const MAP_SCALE: f32 = 20.0;
+
+pub fn map_coord_to_world(pos: Vec2) -> Vec2 {
+    (pos / MAP_SCALE) * 2.0
+}
+
+pub fn world_coord_to_map(pos: Vec2) -> Vec2 {
+    (pos / 2.0) * MAP_SCALE
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ServerMessage {
@@ -117,13 +125,14 @@ pub enum PickupKind {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActiveItem {
     pub pos: Vec2,
+    pub rot: f32,
     pub kind: ActiveItemKind,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ActiveItemKind {
-    GreenShell { direction: Vec2 },
-    RedShell { target: ClientId, velocity: Vec2 },
+    GreenShell { roll: f32 },
+    RedShell { roll: f32 },
     Banana,
 }
 
