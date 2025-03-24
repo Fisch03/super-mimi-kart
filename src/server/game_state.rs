@@ -359,6 +359,54 @@ impl GameState {
         players: &mut HashMap<ClientId, Client>,
         client_handler: ClientManagerHandle,
     ) {
+        use parry2d::{
+            math::{Isometry, Vector},
+            shape::Ball,
+        };
+        let player_collider = Ball::new((4.0 / MAP_SCALE) * 2.0);
+
+        for (i, player) in players.values().enumerate() {
+            let player_pos =
+                Isometry::new(Vector::new(player.state.pos.x, player.state.pos.y), 0.0);
+            for other in players.values().skip(i + 1) {
+                let other_pos =
+                    Isometry::new(Vector::new(other.state.pos.x, other.state.pos.y), 0.0);
+                if let Ok(Some(contact)) = parry2d::query::contact(
+                    &player_pos,
+                    &player_collider,
+                    &other_pos,
+                    &player_collider,
+                    nalgebra::zero(),
+                ) {
+                    client_handler
+                        .send(
+                            SendTo::InGameOnly(player.id()),
+                            ServerMessage::PlayerCollision {
+                                depth: -contact.dist / 2.0,
+                                normal: Vec2::new(contact.normal2.x, contact.normal2.y),
+
+                                other_velocity: other.state.vel,
+                                other_rotation: other.state.rot,
+                            },
+                        )
+                        .await;
+
+                    client_handler
+                        .send(
+                            SendTo::InGameOnly(other.id()),
+                            ServerMessage::PlayerCollision {
+                                normal: Vec2::new(contact.normal1.x, contact.normal1.y),
+                                depth: -contact.dist / 2.0,
+
+                                other_velocity: player.state.vel,
+                                other_rotation: player.state.rot,
+                            },
+                        )
+                        .await;
+                }
+            }
+        }
+
         for i in (0..self.active_items.len()).rev() {
             let item = &mut self.active_items[i];
 

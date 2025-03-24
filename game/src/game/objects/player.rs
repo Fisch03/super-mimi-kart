@@ -16,6 +16,7 @@ use parry2d::shape::Ball;
 use parry2d::utils::point_in_poly2d;
 
 const ROTATION_OFFSET: f32 = 184.0;
+const COLLIDER_RADIUS: f32 = 5.0;
 
 fn load_player(ctx: &CreateContext, transform: Transform) -> Billboard {
     let sprite_sheet = ctx
@@ -128,7 +129,7 @@ impl Player {
             jump_progress: 1.0,
 
             camera_angle,
-            collider: Ball::new(5.0),
+            collider: Ball::new(COLLIDER_RADIUS),
         }
     }
 
@@ -192,12 +193,41 @@ impl Player {
         // );
         // let camera_shift = camera_right * rot_diff * 0.005;
 
-        self.pos -= camera_forward * 0.5;
+        // self.pos -= camera_forward * 0.5;
+        self.pos.y -= 0.18;
 
         cam.transform.pos =
             Vec3::new(self.physical_pos.x, 0.0, self.physical_pos.y) - camera_forward * 3.0 + Vec3::new(0.0, 1.0, 0.0) /* + camera_shift */;
         cam.transform.rot = Rotation::new(-5.0, self.camera_angle, self.rot.z);
         cam.set_fov(60.0 + self.velocity.y * 0.3);
+    }
+
+    pub fn apply_collision(
+        &mut self,
+        normal: Vec2,
+        depth: f32,
+        other_velocity: f32,
+        other_rotation: f32,
+    ) {
+        self.physical_pos += normal * depth;
+
+        let own_forward = Vec2::new(
+            self.physical_rot.to_radians().cos(),
+            self.physical_rot.to_radians().sin(),
+        );
+        let other_forward = Vec2::new(
+            other_rotation.to_radians().cos(),
+            other_rotation.to_radians().sin(),
+        );
+
+        let amt = own_forward.dot(other_forward);
+        let other_new = self.velocity.y * amt;
+        self.velocity.y = other_velocity * amt;
+
+        // add some extra bounce
+        let diff = other_new - self.velocity.y;
+        let factor = if diff > 0.0 { 0.75 } else { 0.25 };
+        self.velocity.y += diff * factor;
     }
 
     pub fn key_down(&mut self, key: &str) {
@@ -369,6 +399,7 @@ impl Object for Player {
             ctx.send_msg(ClientMessage::PlayerUpdate(PlayerState {
                 pos: self.physical_pos,
                 rot: self.physical_rot,
+                vel: self.velocity.y,
 
                 jump_height,
                 track_pos: self.track_pos,
@@ -433,7 +464,11 @@ pub struct ExternalPlayer {
 }
 
 impl ExternalPlayer {
-    pub fn new(ctx: &CreateContext, name: String, transform: Transform) -> Self {
+    pub fn new(ctx: &CreateContext, name: String, start: Vec2) -> Self {
+        let transform = Transform::new()
+            .position(start.x, -0.18, start.y)
+            .rotation(0.0, 270.0, 0.0);
+
         let billboard = load_player(ctx, transform);
 
         Self {
@@ -445,7 +480,7 @@ impl ExternalPlayer {
     }
 
     pub fn update_state(&mut self, state: PlayerState) {
-        self.pos = Vec3::new(state.pos.x, state.jump_height, state.pos.y);
+        self.pos = Vec3::new(state.pos.x, state.jump_height - 0.18, state.pos.y);
         self.rot = Rotation::new(0.0, state.rot, 0.0);
         self.track_pos = state.track_pos;
     }

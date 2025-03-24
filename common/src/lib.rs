@@ -64,6 +64,13 @@ pub enum ServerMessage {
         player: ClientId,
     },
 
+    PlayerCollision {
+        depth: f32,
+        other_velocity: f32,
+        other_rotation: f32,
+        normal: Vec2,
+    },
+
     // round has ended, show placements
     EndRound {
         placements: Vec<Placement>,
@@ -104,6 +111,7 @@ impl ClientMessage {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PlayerState {
     pub pos: Vec2,
+    pub vel: f32,
     pub rot: f32,
     pub track_pos: TrackPosition,
     pub jump_height: f32,

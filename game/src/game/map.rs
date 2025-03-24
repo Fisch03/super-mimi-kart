@@ -1,9 +1,5 @@
 use super::Scene;
-use crate::engine::{
-    Camera, CreateContext,
-    object::{Object, Transform},
-    sprite::Skybox,
-};
+use crate::engine::{Camera, CreateContext, object::Object, sprite::Skybox};
 use common::{RoundInitParams, map::*, map_coord_to_world, types::*, world_coord_to_map};
 use nalgebra::Point2;
 use parry2d::shape::Polyline;
@@ -43,16 +39,7 @@ impl MapToScene for Map {
             .map(|(i, (id, name))| {
                 let start = self.track.iter_starts().nth(i).unwrap();
                 let start = map_coord_to_world(start);
-                (
-                    *id,
-                    objects::ExternalPlayer::new(
-                        ctx,
-                        name.clone(),
-                        Transform::new()
-                            .position(start.x, 0.0, start.y)
-                            .rotation(0.0, 270.0, 0.0),
-                    ),
-                )
+                (*id, objects::ExternalPlayer::new(ctx, name.clone(), start))
             })
             .collect();
 

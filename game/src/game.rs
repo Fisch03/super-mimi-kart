@@ -257,6 +257,22 @@ impl Game {
                     }
                 }
 
+                ServerMessage::PlayerCollision {
+                    normal,
+                    depth,
+
+                    other_velocity,
+                    other_rotation,
+                } => {
+                    let scene = match &mut self.state {
+                        State::Running { scene, .. } => scene,
+                        _ => unreachable!(),
+                    };
+                    scene
+                        .player
+                        .apply_collision(normal, depth, other_velocity, other_rotation);
+                }
+
                 _ => log::warn!("ignoring unexpected message: {:?}", msg),
             }
         }
