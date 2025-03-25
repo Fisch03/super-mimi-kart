@@ -5,7 +5,7 @@ use std::sync::mpsc;
 use web_sys::WebSocket;
 
 use crate::engine::{
-    Camera, CreateContext, RenderContext, Shaders, UpdateContext, cache::AssetCache,
+    Camera, CreateContext, RenderContext, Shaders, UiCamera, UpdateContext, cache::AssetCache,
     object::Object, sprite::Skybox,
 };
 
@@ -13,6 +13,9 @@ mod map;
 pub use map::{Collider, Offroad};
 use map::{MapDownload, MapToScene};
 pub mod objects;
+
+mod assets;
+use assets::SharedAssets;
 
 #[derive(Debug)]
 enum State {
@@ -27,6 +30,7 @@ enum State {
         scene: Scene,
         map: Map,
         race_time: f32,
+        race_completed: bool,
     },
 }
 
@@ -45,7 +49,6 @@ struct Scene {
     items: Vec<objects::Item>,
 
     map: objects::Map,
-    skybox: Skybox,
 
     static_objects: Vec<Box<dyn Object>>,
 
@@ -70,10 +73,12 @@ pub struct Game {
     gl: glow::Context,
     shaders: Shaders,
     viewport: Vec2,
+    ui_cam: UiCamera,
 
     rng: rand::rngs::SmallRng,
 
     cache: AssetCache,
+    shared_assets: SharedAssets,
     state: State,
 }
 
@@ -105,17 +110,28 @@ impl Game {
         let time = web_sys::window().unwrap().performance().unwrap().now();
         let rng = rand::rngs::SmallRng::seed_from_u64((time * 12345.0) as u64);
 
+        let ctx = CreateContext {
+            gl: &gl,
+            assets: &cache,
+            viewport,
+        };
+        let shared_assets = SharedAssets::load(&ctx);
+
         Self {
             ws,
             ws_rx,
             gl,
-            cache,
+
             shaders,
             viewport,
+            ui_cam: UiCamera::new(viewport),
 
             rng,
 
             state: State::WaitingToJoin,
+
+            cache,
+            shared_assets,
         }
     }
 
@@ -128,6 +144,8 @@ impl Game {
     pub fn resize(&mut self, dim: Vec2) {
         self.viewport = dim;
         unsafe { self.gl.viewport(0, 0, dim.x as i32, dim.y as i32) };
+
+        self.ui_cam.resize(dim);
 
         match &mut self.state {
             State::Running { scene, .. } => {
@@ -188,6 +206,7 @@ impl Game {
                     let ctx = CreateContext {
                         gl: &self.gl,
                         assets: &self.cache,
+                        viewport: self.viewport,
                     };
                     objects::Item::preload_assets(&ctx);
                     let scene = map.to_scene(&ctx, self.viewport, &params);
@@ -196,6 +215,7 @@ impl Game {
                         map,
                         scene,
                         race_time: 0.0,
+                        race_completed: false,
                     };
                 }
 
@@ -217,6 +237,7 @@ impl Game {
                     let ctx = CreateContext {
                         gl: &self.gl,
                         assets: &self.cache,
+                        viewport: self.viewport,
                     };
 
                     scene.items.clear();
@@ -283,6 +304,7 @@ impl Game {
                 scene,
                 map,
                 race_time,
+                race_completed,
             } => {
                 let mut ctx = UpdateContext {
                     dt,
@@ -323,6 +345,12 @@ impl Game {
                     &scene.item_boxes,
                     &mut scene.cam,
                 );
+
+                if scene.player.track_pos.lap > 3 {
+                    *race_completed = true;
+                    let race_time = *race_time;
+                    self.send(ClientMessage::FinishRound { race_time });
+                }
             }
             State::Loading { map_download } => {
                 let map = match map_download.poll() {
@@ -360,7 +388,9 @@ impl Game {
                     assets: &self.cache,
 
                     shaders: &self.shaders,
+
                     cam: &scene.cam,
+                    ui_cam: &self.ui_cam,
                 };
 
                 let mut depth_objects: Vec<(&dyn Object, f32)> = scene
@@ -382,11 +412,15 @@ impl Game {
                 depth_objects.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
                 // render
-                scene.skybox.render(&ctx);
+                self.shared_assets.skybox.render(&ctx);
                 scene.map.render(&ctx); // map is always at the back
                 for (o, _) in depth_objects {
                     o.render(&ctx);
                 }
+
+                unsafe { self.gl.disable(glow::DEPTH_TEST) };
+                self.shared_assets.game_logo.render(&ctx);
+                unsafe { self.gl.enable(glow::DEPTH_TEST) };
             }
             _ => log::warn!("todo: render state {}", self.state),
         }

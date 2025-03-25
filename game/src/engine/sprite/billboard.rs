@@ -36,7 +36,7 @@ impl Billboard {
     }
 
     pub fn render(&self, ctx: &RenderContext) {
-        ctx.shaders.billboard.render(ctx, self);
+        ctx.shaders.unlit.render_billboard(ctx, self);
     }
 
     pub fn model_mat(&self, cam: &Camera) -> Mat4 {

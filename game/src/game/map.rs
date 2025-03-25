@@ -1,6 +1,6 @@
 use super::Scene;
 use crate::engine::{Camera, CreateContext, object::Object, sprite::Skybox};
-use common::{RoundInitParams, map::*, map_coord_to_world, types::*, world_coord_to_map};
+use common::{RoundInitParams, map::*, map_coord_to_world, types::*};
 use nalgebra::Point2;
 use parry2d::shape::Polyline;
 use poll_promise::Promise;
@@ -95,7 +95,6 @@ impl MapToScene for Map {
 
         Scene {
             cam,
-            skybox: Skybox::load(ctx, "skybox"),
 
             own_id: params.client_id,
 

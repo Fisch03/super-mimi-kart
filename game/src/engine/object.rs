@@ -42,20 +42,20 @@ impl Transform {
         }
     }
 
-    pub fn position(self, x: f32, y: f32, z: f32) -> Self {
+    pub const fn position(self, x: f32, y: f32, z: f32) -> Self {
         Self {
             pos: Position::new(x, y, z),
             ..self
         }
     }
-    pub fn rotation(self, x: f32, y: f32, z: f32) -> Self {
+    pub const fn rotation(self, x: f32, y: f32, z: f32) -> Self {
         Self {
             rot: Rotation::new(x, y, z),
             ..self
         }
     }
 
-    pub fn scale(self, x: f32, y: f32, z: f32) -> Self {
+    pub const fn scale(self, x: f32, y: f32, z: f32) -> Self {
         Self {
             scale: Vec3::new(x, y, z),
             ..self

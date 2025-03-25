@@ -41,7 +41,7 @@ pub struct Player {
     physical_pos: Vec2,
     physical_rot: f32,
 
-    track_pos: TrackPosition,
+    pub track_pos: TrackPosition,
     place: usize,
 
     input: Vec2,

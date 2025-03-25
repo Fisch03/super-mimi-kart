@@ -9,7 +9,6 @@ mod unlit;
 #[derive(Debug)]
 pub struct Shaders {
     pub unlit: unlit::UnlitShader,
-    pub billboard: unlit::BillboardShader,
     pub skybox: skybox::SkyboxShader,
 }
 
@@ -17,7 +16,6 @@ impl Shaders {
     pub fn new(gl: &Context) -> Self {
         Self {
             unlit: unlit::UnlitShader::new(gl),
-            billboard: unlit::BillboardShader::new(gl),
             skybox: skybox::SkyboxShader::new(gl),
         }
     }

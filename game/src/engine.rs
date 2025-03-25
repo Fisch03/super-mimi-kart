@@ -15,11 +15,13 @@ pub mod object;
 pub mod sprite;
 
 mod cam;
-pub use cam::Camera;
+pub use cam::{Camera, UiCamera};
 
 pub struct CreateContext<'a> {
     pub gl: &'a glow::Context,
     pub assets: &'a AssetCache,
+
+    pub viewport: Vec2,
 }
 
 impl CreateContext<'_> {
@@ -45,6 +47,7 @@ impl AsRef<AssetCache> for CreateContext<'_> {
 pub struct RenderContext<'a> {
     pub gl: &'a glow::Context,
     pub cam: &'a Camera,
+    pub ui_cam: &'a UiCamera,
     pub shaders: &'a Shaders,
     pub assets: &'a AssetCache,
 }

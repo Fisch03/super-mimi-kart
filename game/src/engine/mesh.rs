@@ -193,7 +193,13 @@ impl Mesh{
 
     pub fn render(&self, ctx: &RenderContext, transform: &Transform) {
         for primitive in &self.primitives {
-            ctx.shaders.unlit.render(ctx, transform, primitive);
+            ctx.shaders.unlit.render_primitive(ctx, transform, primitive);
+        }
+    }
+
+    pub fn render_ui(&self, ctx: &RenderContext, transform: &Transform) {
+        for primitive in &self.primitives {
+            ctx.shaders.unlit.render_ui(ctx, transform, primitive);
         }
     }
 }

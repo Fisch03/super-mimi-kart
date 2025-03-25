@@ -10,6 +10,11 @@ pub struct Camera {
     aspect: f32,
 }
 
+#[derive(Debug)]
+pub struct UiCamera {
+    pub proj: Mat4,
+}
+
 pub struct CameraUniforms {
     pub view: UniformLocation,
     pub proj: UniformLocation,
@@ -94,6 +99,29 @@ impl Camera {
                 Some(&uniforms.view),
                 false,
                 &self.view_no_translation().to_cols_array(),
+            );
+        }
+    }
+}
+
+impl UiCamera {
+    pub fn new(viewport: Vec2) -> Self {
+        Self {
+            proj: Mat4::orthographic_rh(0.0, viewport.x, viewport.y, 0.0, -1.0, 1.0),
+        }
+    }
+
+    pub fn resize(&mut self, viewport: Vec2) {
+        self.proj = Mat4::orthographic_rh(0.0, viewport.x, viewport.y, 0.0, -1.0, 1.0);
+    }
+
+    pub fn bind(&self, gl: &Context, uniforms: &CameraUniforms) {
+        unsafe {
+            gl.uniform_matrix_4_f32_slice(Some(&uniforms.proj), false, &self.proj.to_cols_array());
+            gl.uniform_matrix_4_f32_slice(
+                Some(&uniforms.view),
+                false,
+                &Mat4::IDENTITY.to_cols_array(),
             );
         }
     }
