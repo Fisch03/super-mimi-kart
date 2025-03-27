@@ -24,7 +24,8 @@ fn build_wasm_pkg(in_dir: &str, pkg_out_dir: &str) {
     let profile = std::env::var("PROFILE").unwrap();
 
     // build the web client
-    if !std::env::var("SKIP_CLIENT_BUILD").is_ok() {
+    let do_build = !std::env::var("SKIP_CLIENT_BUILD").is_ok();
+    if do_build {
         let mut build_wasm = Command::new("wasm-pack");
         build_wasm.arg("build");
 
@@ -47,13 +48,16 @@ fn build_wasm_pkg(in_dir: &str, pkg_out_dir: &str) {
 
     // copy client files to server
     let server_asset_dir = Path::new(pkg_out_dir);
-
     std::fs::create_dir_all(&server_asset_dir).unwrap();
-    copy_dir(&out_dir, &server_asset_dir);
+
+    if do_build {
+        copy_dir(&out_dir, &server_asset_dir);
+    }
     copy_dir(&in_dir.join("static"), &server_asset_dir);
 }
 
 fn copy_dir(src: &Path, dest: &Path) {
+    println!("{:?} -> {:?}", src, dest);
     for entry in std::fs::read_dir(src).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();

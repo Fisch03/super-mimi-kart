@@ -1,16 +1,16 @@
 use common::map::*;
 use indexed_db_futures::{
+    KeyPath, KeyPathSeq,
     database::Database,
     error::{Error as DbError, OpenDbError},
     prelude::*,
     transaction::TransactionMode,
-    KeyPath, KeyPathSeq,
 };
 use js_sys::{Array, ArrayBuffer, Uint8Array};
 use serde::{Deserialize, Serialize};
 use std::{io::Cursor, sync::mpsc};
 use thiserror::Error;
-use wasm_bindgen::{closure::Closure, JsCast};
+use wasm_bindgen::{JsCast, closure::Closure};
 use web_sys::{Blob, BlobPropertyBag, FileReader, HtmlElement, Url};
 
 const MAP_ID: u32 = 1;
@@ -177,7 +177,7 @@ impl MapDB {
 
         tx.commit().await?;
 
-        self.save(map).await;
+        self.save(map).await?;
 
         Ok(())
     }

@@ -1,4 +1,4 @@
-use common::{types::*, ServerMessage};
+use common::{ServerMessage, types::*};
 use std::{cell::RefCell, rc::Rc, sync::mpsc};
 use wasm_bindgen::prelude::*;
 use web_sys::{ErrorEvent, MessageEvent, WebSocket};
@@ -41,8 +41,10 @@ pub fn start() {
     canvas.set_width(dim.x as u32);
     canvas.set_height(dim.y as u32);
 
+    let context_attrs = web_sys::WebGlContextAttributes::new();
+    context_attrs.set_antialias(false);
     let webgl2_context = canvas
-        .get_context("webgl2")
+        .get_context_with_context_options("webgl2", &context_attrs)
         .unwrap()
         .unwrap()
         .dyn_into::<web_sys::WebGl2RenderingContext>()

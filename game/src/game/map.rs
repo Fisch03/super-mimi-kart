@@ -1,5 +1,5 @@
 use super::Scene;
-use crate::engine::{Camera, CreateContext, object::Object, sprite::Skybox};
+use crate::engine::{Camera, CreateContext, object::Object};
 use common::{RoundInitParams, map::*, map_coord_to_world, types::*};
 use nalgebra::Point2;
 use parry2d::shape::Polyline;
@@ -16,11 +16,11 @@ impl std::fmt::Debug for Collider {
 pub struct Offroad(pub Vec<Point2<f32>>);
 
 pub trait MapToScene {
-    fn to_scene(&self, gl: &CreateContext, viewport: Vec2, params: &RoundInitParams) -> Scene;
+    fn to_scene(&self, gl: &CreateContext, params: &RoundInitParams) -> Scene;
 }
 
 impl MapToScene for Map {
-    fn to_scene(&self, ctx: &CreateContext, viewport: Vec2, params: &RoundInitParams) -> Scene {
+    fn to_scene(&self, ctx: &CreateContext, params: &RoundInitParams) -> Scene {
         use crate::game::objects;
         let objects: Vec<Box<dyn Object>> = Vec::new();
 
@@ -42,8 +42,6 @@ impl MapToScene for Map {
                 (*id, objects::ExternalPlayer::new(ctx, name.clone(), start))
             })
             .collect();
-
-        let cam = Camera::new(60.0, viewport);
 
         let colliders = self
             .colliders
@@ -94,8 +92,6 @@ impl MapToScene for Map {
             .collect();
 
         Scene {
-            cam,
-
             own_id: params.client_id,
 
             player,
@@ -111,8 +107,6 @@ impl MapToScene for Map {
             map,
 
             static_objects: objects,
-
-            map_dimensions: Vec2::new(map_image.width() as f32, map_image.height() as f32),
         }
     }
 }

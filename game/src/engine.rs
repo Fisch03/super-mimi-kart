@@ -13,6 +13,7 @@ pub use shaders::Shaders;
 pub mod mesh;
 pub mod object;
 pub mod sprite;
+pub mod ui;
 
 mod cam;
 pub use cam::{Camera, UiCamera};
@@ -50,6 +51,7 @@ pub struct RenderContext<'a> {
     pub ui_cam: &'a UiCamera,
     pub shaders: &'a Shaders,
     pub assets: &'a AssetCache,
+    pub viewport: Vec2,
 }
 
 impl AsRef<AssetCache> for RenderContext<'_> {

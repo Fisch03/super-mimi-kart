@@ -46,6 +46,7 @@ features = [
     "ErrorEvent",
 
     "WebGl2RenderingContext", 
+    "WebGlContextAttributes"
 ]
 
 [dependencies.image]

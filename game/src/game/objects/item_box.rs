@@ -6,6 +6,7 @@ use crate::engine::{
     sprite::SpriteSheet,
 };
 use common::types::*;
+use glow::HasContext;
 
 use image::DynamicImage;
 
@@ -50,7 +51,11 @@ impl Object for ItemBox {
 
     fn render(&self, ctx: &RenderContext) {
         if self.state {
+            // FIXME: this is just a hack since the cube
+            // mesh has the wrong winding order but i cant be bothered to redo it rn
+            unsafe { ctx.disable(glow::CULL_FACE) };
             self.mesh.get().render(ctx, &self.transform);
+            unsafe { ctx.enable(glow::CULL_FACE) };
         }
     }
 }

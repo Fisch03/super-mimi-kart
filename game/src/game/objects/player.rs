@@ -17,6 +17,8 @@ use parry2d::utils::point_in_poly2d;
 
 const ROTATION_OFFSET: f32 = 184.0;
 const COLLIDER_RADIUS: f32 = 5.0;
+const HIT_TIME: f32 = 3.0;
+const HIT_ROTATION: f32 = 360.0 * 3.0;
 
 fn load_player(ctx: &CreateContext, transform: Transform) -> Billboard {
     let sprite_sheet = ctx
@@ -50,6 +52,7 @@ pub struct Player {
     offroad_since: Option<f64>,
     drift_state: DriftState,
     jump_progress: f32,
+    hit_time: f32,
 
     coins: u32,
     use_item: bool,
@@ -127,6 +130,7 @@ impl Player {
             offroad_since: None,
             drift_state: DriftState::None,
             jump_progress: 1.0,
+            hit_time: 0.0,
 
             camera_angle,
             collider: Ball::new(COLLIDER_RADIUS),
@@ -197,7 +201,7 @@ impl Player {
         self.pos.y -= 0.18;
 
         cam.transform.pos =
-            Vec3::new(self.physical_pos.x, 0.0, self.physical_pos.y) - camera_forward * 3.0 + Vec3::new(0.0, 1.0, 0.0) /* + camera_shift */;
+            Vec3::new(self.physical_pos.x, 0.0, self.physical_pos.y) - camera_forward * 2.5 + Vec3::new(0.0, 1.0, 0.0) /* + camera_shift */;
         cam.transform.rot = Rotation::new(-5.0, self.camera_angle, self.rot.z);
         cam.set_fov(60.0 + self.velocity.y * 0.3);
     }
@@ -228,6 +232,13 @@ impl Player {
         let diff = other_new - self.velocity.y;
         let factor = if diff > 0.0 { 0.75 } else { 0.25 };
         self.velocity.y += diff * factor;
+    }
+
+    pub fn hit(&mut self) {
+        if self.hit_time <= 0.0 {
+            self.hit_time = HIT_TIME;
+            self.rot.y += HIT_ROTATION;
+        }
     }
 
     pub fn key_down(&mut self, key: &str) {
@@ -336,6 +347,12 @@ impl Object for Player {
         self.drift_state.update(ctx.dt);
         steer_accel += self.drift_state.as_multiplier() * DRIFT_ACCEL;
 
+        if self.hit_time > 0.0 {
+            self.hit_time -= ctx.dt;
+            move_accel = 0.0;
+            steer_accel = 0.0;
+        }
+
         // TODO: use smooth_step for movement but thats broken rn
         self.velocity.y = f32::lerp(self.velocity.y, move_accel, ctx.dt * 2.0);
         self.velocity.x = f32::lerp(self.velocity.x, steer_accel, ctx.dt * 4.0);
@@ -384,8 +401,13 @@ impl Object for Player {
         let jump_height = f32::sin(self.jump_progress * std::f32::consts::PI) * 0.15;
         self.pos = Vec3::new(self.physical_pos.x, jump_height, self.physical_pos.y);
 
-        let target_rot =
-            self.physical_rot + self.drift_state.as_multiplier() * 75.0 + self.input.x * 15.0;
+        let hit_progress = 1.0 - self.hit_time / HIT_TIME;
+        let hit_rot = hit_progress * HIT_ROTATION;
+
+        let target_rot = self.physical_rot
+            + self.drift_state.as_multiplier() * 75.0
+            + self.input.x * 15.0
+            + hit_rot;
         self.rot.y = f32::lerp(self.rot.y, target_rot, ctx.dt * 5.0);
 
         // camera

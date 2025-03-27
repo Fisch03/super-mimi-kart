@@ -236,6 +236,17 @@ impl ClientManager {
                             .await;
                     }
                     self.waiting_clients.extend(self.loading_clients.drain(..));
+                    if let Some(task) = self.loading_task.take() {
+                        task.join_handle.abort();
+                        task.result_tx
+                            .send(
+                                self.clients
+                                    .values()
+                                    .map(|c| (c.id(), c.name().to_string()))
+                                    .collect(),
+                            )
+                            .unwrap();
+                    }
                 }
 
                 ClientManagerCommand::RaceTimeout => self.force_end_round = true,

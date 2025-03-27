@@ -6,7 +6,7 @@ use web_sys::WebSocket;
 
 use crate::engine::{
     Camera, CreateContext, RenderContext, Shaders, UiCamera, UpdateContext, cache::AssetCache,
-    object::Object, sprite::Skybox,
+    object::Object,
 };
 
 mod map;
@@ -36,7 +36,6 @@ enum State {
 
 #[derive(Debug)]
 struct Scene {
-    cam: Camera,
     own_id: ClientId,
     player: objects::Player,
     players: HashMap<ClientId, objects::ExternalPlayer>,
@@ -51,8 +50,6 @@ struct Scene {
     map: objects::Map,
 
     static_objects: Vec<Box<dyn Object>>,
-
-    map_dimensions: Vec2,
 }
 
 impl std::fmt::Display for State {
@@ -73,6 +70,7 @@ pub struct Game {
     gl: glow::Context,
     shaders: Shaders,
     viewport: Vec2,
+    cam: Camera,
     ui_cam: UiCamera,
 
     rng: rand::rngs::SmallRng,
@@ -125,6 +123,7 @@ impl Game {
             shaders,
             viewport,
             ui_cam: UiCamera::new(viewport),
+            cam: Camera::new(60.0, viewport),
 
             rng,
 
@@ -145,14 +144,8 @@ impl Game {
         self.viewport = dim;
         unsafe { self.gl.viewport(0, 0, dim.x as i32, dim.y as i32) };
 
+        self.cam.resize(dim);
         self.ui_cam.resize(dim);
-
-        match &mut self.state {
-            State::Running { scene, .. } => {
-                scene.cam.resize(dim);
-            }
-            _ => {}
-        }
     }
 
     pub fn key_down(&mut self, key: String) {
@@ -209,7 +202,7 @@ impl Game {
                         viewport: self.viewport,
                     };
                     objects::Item::preload_assets(&ctx);
-                    let scene = map.to_scene(&ctx, self.viewport, &params);
+                    let scene = map.to_scene(&ctx, &params);
 
                     self.state = State::Running {
                         map,
@@ -294,6 +287,19 @@ impl Game {
                         .apply_collision(normal, depth, other_velocity, other_rotation);
                 }
 
+                ServerMessage::HitByItem { player }
+                    if matches!(self.state, State::Running { .. }) =>
+                {
+                    let scene = match &mut self.state {
+                        State::Running { scene, .. } => scene,
+                        _ => unreachable!(),
+                    };
+
+                    if player == scene.own_id {
+                        scene.player.hit();
+                    }
+                }
+
                 _ => log::warn!("ignoring unexpected message: {:?}", msg),
             }
         }
@@ -343,7 +349,7 @@ impl Game {
                     &scene.players,
                     &scene.coins,
                     &scene.item_boxes,
-                    &mut scene.cam,
+                    &mut self.cam,
                 );
 
                 if scene.player.track_pos.lap > 3 {
@@ -381,18 +387,19 @@ impl Game {
                 .clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT | glow::STENCIL_BUFFER_BIT);
         };
 
+        let ctx = RenderContext {
+            gl: &self.gl,
+            viewport: self.viewport,
+            assets: &self.cache,
+
+            shaders: &self.shaders,
+
+            cam: &self.cam,
+            ui_cam: &self.ui_cam,
+        };
+
         match &self.state {
             State::Running { scene, .. } => {
-                let ctx = RenderContext {
-                    gl: &self.gl,
-                    assets: &self.cache,
-
-                    shaders: &self.shaders,
-
-                    cam: &scene.cam,
-                    ui_cam: &self.ui_cam,
-                };
-
                 let mut depth_objects: Vec<(&dyn Object, f32)> = scene
                     .static_objects
                     .iter()
@@ -403,7 +410,7 @@ impl Game {
                     .chain(scene.item_boxes.iter().map(|o| o as &dyn Object))
                     .chain(scene.items.iter().map(|o| o as &dyn Object))
                     .map(|o| {
-                        let depth = o.as_ref().camera_depth(&scene.cam);
+                        let depth = o.as_ref().camera_depth(&self.cam);
                         (o, depth)
                     })
                     .collect();
@@ -419,10 +426,16 @@ impl Game {
                 }
 
                 unsafe { self.gl.disable(glow::DEPTH_TEST) };
-                self.shared_assets.game_logo.render(&ctx);
+                self.shared_assets.item_frame.render(&ctx);
                 unsafe { self.gl.enable(glow::DEPTH_TEST) };
             }
-            _ => log::warn!("todo: render state {}", self.state),
+            _ => {
+                unsafe { self.gl.disable(glow::DEPTH_TEST) };
+                self.shared_assets.game_logo.render(&ctx);
+                unsafe { self.gl.enable(glow::DEPTH_TEST) };
+
+                log::warn!("todo: render state {}", self.state)
+            }
         }
     }
 }

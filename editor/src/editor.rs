@@ -137,7 +137,10 @@ impl eframe::App for Editor {
                         }
                         if ui.button("Save").clicked() {
                             self.map.round_all();
-                            map_io::download_map(&self.map);
+                            match map_io::download_map(&self.map) {
+                                Ok(_) => {}
+                                Err(e) => log::error!("failed to save map: {:?}", e),
+                            }
                         }
                     });
                 });
@@ -181,7 +184,7 @@ impl eframe::App for Editor {
             let full_save = self.full_save;
             self.full_save = false;
 
-            Promise::spawn_local(async move {
+            let _ = Promise::spawn_local(async move {
                 let save_op = if full_save {
                     log::debug!("saving map with assets");
                     db.save_with_assets(map).await

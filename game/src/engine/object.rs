@@ -9,21 +9,7 @@ where
 {
     fn update(&mut self, _ctx: &mut UpdateContext) {}
 
-    fn transparency_depth(&self, _cam: &Camera) -> Option<f32> {
-        None
-    }
     fn render(&self, ctx: &RenderContext);
-
-    // fn key_down(&mut self, _key: &str) {}
-    // fn key_up(&mut self, _key: &str) {}
-
-    fn check_collision(&self, _player: Rect) -> Option<Collision> {
-        None
-    }
-}
-
-pub struct Collision {
-    normal: Vec2,
 }
 
 #[derive(Debug, Clone)]
@@ -66,12 +52,12 @@ impl Transform {
         self.scale = Vec3::new(s, s, s);
     }
 
-    pub fn rotate_around(&mut self, point: Vec3, angle: f32) {
-        let axis = Vec3::new(0.0, 1.0, 0.0);
-        let rot = Quat::from_axis_angle(axis, angle.to_radians());
-        self.pos = rot * (self.pos - point) + point;
-        self.rot.y -= angle;
-    }
+    // pub fn rotate_around(&mut self, point: Vec3, angle: f32) {
+    //     let axis = Vec3::new(0.0, 1.0, 0.0);
+    //     let rot = Quat::from_axis_angle(axis, angle.to_radians());
+    //     self.pos = rot * (self.pos - point) + point;
+    //     self.rot.y -= angle;
+    // }
 
     pub fn camera_depth(&self, cam: &Camera) -> f32 {
         let to_cam = cam.transform.pos - self.pos;

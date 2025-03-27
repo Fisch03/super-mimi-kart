@@ -1,4 +1,5 @@
 pub use glam::f32::*;
+pub use glam::i32::*;
 pub use glam::u32::*;
 
 use tar::Archive;
