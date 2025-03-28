@@ -17,8 +17,6 @@ use parry2d::utils::point_in_poly2d;
 
 const ROTATION_OFFSET: f32 = 184.0;
 const COLLIDER_RADIUS: f32 = 5.0;
-const HIT_TIME: f32 = 3.0;
-const HIT_ROTATION: f32 = 360.0 * 3.0;
 
 fn load_player(ctx: &CreateContext, transform: Transform) -> Billboard {
     let sprite_sheet = ctx
@@ -235,10 +233,7 @@ impl Player {
     }
 
     pub fn hit(&mut self) {
-        if self.hit_time <= 0.0 {
-            self.hit_time = HIT_TIME;
-            self.rot.y += HIT_ROTATION;
-        }
+        log::error!("TODO: hit");
     }
 
     pub fn key_down(&mut self, key: &str) {
@@ -401,13 +396,8 @@ impl Object for Player {
         let jump_height = f32::sin(self.jump_progress * std::f32::consts::PI) * 0.15;
         self.pos = Vec3::new(self.physical_pos.x, jump_height, self.physical_pos.y);
 
-        let hit_progress = 1.0 - self.hit_time / HIT_TIME;
-        let hit_rot = hit_progress * HIT_ROTATION;
-
-        let target_rot = self.physical_rot
-            + self.drift_state.as_multiplier() * 75.0
-            + self.input.x * 15.0
-            + hit_rot;
+        let target_rot =
+            self.physical_rot + self.drift_state.as_multiplier() * 75.0 + self.input.x * 15.0;
         self.rot.y = f32::lerp(self.rot.y, target_rot, ctx.dt * 5.0);
 
         // camera
