@@ -123,7 +123,7 @@ impl ActiveItem {
                         let mut track_pos = owner.state.track_pos;
 
                         track_pos.lap = if n.full_lap {
-                            n.track_pos.lap - 1
+                            n.track_pos.lap.saturating_sub(1)
                         } else {
                             n.track_pos.lap
                         };

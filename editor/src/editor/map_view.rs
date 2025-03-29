@@ -2,9 +2,10 @@ use common::map::{AssetId, Collider, Map};
 use common::types::*;
 use earcut::Earcut;
 use egui::{
+    Color32, Grid, Rect, Sense, Shape, Spinner, TextureFilter, TextureOptions, Window,
     epaint::{CircleShape, PathShape, RectShape},
     load::{SizedTexture, TexturePoll},
-    pos2, vec2, Color32, Grid, Rect, Sense, Shape, Spinner, TextureFilter, TextureOptions, Window,
+    pos2, vec2,
 };
 
 pub mod selection;
@@ -176,7 +177,7 @@ impl View {
             Color32::WHITE,
         );
 
-        for start in map.track.iter_starts().take(self.start_viz_amt) {
+        for (start, _) in map.track.iter_starts().take(self.start_viz_amt) {
             let start = pos2(start.x, start.y) * self.zoom + image_center_screen;
             ui.painter().circle_filled(start, 5.0, Color32::GREEN);
         }

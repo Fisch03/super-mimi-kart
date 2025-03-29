@@ -28,7 +28,7 @@ pub struct TrackStartIter<'a> {
     center_distance: f32,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct TrackPosition {
     pub lap: usize,
     pub segment: usize,
@@ -36,7 +36,7 @@ pub struct TrackPosition {
 }
 
 impl Track {
-    pub fn iter_starts(&self) -> impl Iterator<Item = Vec2> + '_ {
+    pub fn iter_starts(&self) -> impl Iterator<Item = (Vec2, f32)> + '_ {
         TrackStartIter::new(self)
     }
 
@@ -205,7 +205,7 @@ impl<'a> TrackStartIter<'a> {
 }
 
 impl<'a> Iterator for TrackStartIter<'a> {
-    type Item = Vec2;
+    type Item = (Vec2, f32);
     fn next(&mut self) -> Option<Self::Item> {
         self.offset += self.step_size;
         loop {
@@ -228,19 +228,37 @@ impl<'a> Iterator for TrackStartIter<'a> {
                 //     p.x + normal.x * side * self.center_distance,
                 //     p.y + normal.y * side * self.center_distance,
                 // ));
-                return Some(p + normal * side * self.center_distance);
+                let pos = p + normal * side * self.center_distance;
+                let rot = f32::atan2(segment.dy(), segment.dx()).to_degrees();
+                return Some((pos, rot));
             }
+        }
+    }
+}
+
+impl TrackPosition {
+    fn normalized_segment(&self) -> usize {
+        if self.segment == 0 {
+            usize::MAX
+        } else {
+            self.segment
         }
     }
 }
 
 impl std::cmp::Eq for TrackPosition {}
 
+impl std::cmp::PartialOrd for TrackPosition {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 impl std::cmp::Ord for TrackPosition {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.lap
             .cmp(&other.lap)
-            .then_with(|| self.segment.cmp(&other.segment))
+            .then_with(|| self.normalized_segment().cmp(&other.normalized_segment()))
             .then_with(|| {
                 self.progress
                     .partial_cmp(&other.progress)

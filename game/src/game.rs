@@ -1,13 +1,13 @@
-use common::{ClientId, ClientMessage, PickupKind, ServerMessage, map::Map, types::*};
 use glow::*;
 use std::collections::HashMap;
-use std::sync::mpsc;
+use std::{rc::Rc, sync::mpsc};
 use web_sys::WebSocket;
 
 use crate::engine::{
     Camera, CreateContext, RenderContext, Shaders, UiCamera, UpdateContext, cache::AssetCache,
     object::Object,
 };
+use common::{ClientId, ClientMessage, PickupKind, Placement, ServerMessage, map::Map, types::*};
 
 mod map;
 pub use map::{Collider, Offroad};
@@ -24,14 +24,22 @@ enum State {
         map_download: MapDownload,
     },
     WaitingToStart {
-        map: Map,
+        map: Rc<Map>,
     },
     Running {
         scene: Scene,
-        map: Map,
-        race_time: f32,
-        race_completed: bool,
+        map: Rc<Map>,
+        race_state: RaceState,
     },
+}
+
+#[derive(Debug)]
+enum RaceState {
+    Waiting,
+    Countdown { current: u32, next: f32 },
+    Running { race_time: f32 },
+    Completed,
+    RaceResults { placements: Vec<Placement> },
 }
 
 #[derive(Debug)]
@@ -72,6 +80,8 @@ pub struct Game {
     viewport: Vec2,
     cam: Camera,
     ui_cam: UiCamera,
+
+    player_count: usize,
 
     rng: rand::rngs::SmallRng,
 
@@ -125,6 +135,8 @@ impl Game {
             ui_cam: UiCamera::new(viewport),
             cam: Camera::new(60.0, viewport),
 
+            player_count: 1,
+
             rng,
 
             state: State::WaitingToJoin,
@@ -150,7 +162,11 @@ impl Game {
 
     pub fn key_down(&mut self, key: String) {
         match &mut self.state {
-            State::Running { scene, .. } => {
+            State::Running {
+                scene,
+                race_state: RaceState::Running { .. },
+                ..
+            } => {
                 scene.player.key_down(&key);
             }
             _ => {}
@@ -158,7 +174,11 @@ impl Game {
     }
     pub fn key_up(&mut self, key: String) {
         match &mut self.state {
-            State::Running { scene, .. } => {
+            State::Running {
+                scene,
+                race_state: RaceState::Running { .. },
+                ..
+            } => {
                 scene.player.key_up(&key);
             }
             _ => {}
@@ -178,22 +198,20 @@ impl Game {
 
         // handle messages
         while let Ok(msg) = self.ws_rx.try_recv() {
-            match msg {
-                ServerMessage::PrepareRound { map }
-                    if matches!(self.state, State::WaitingToJoin) =>
-                {
+            match (msg, &mut self.state) {
+                (ServerMessage::PrepareRound { map }, _) => {
                     log::info!("preparing round with map: {:?}", map);
                     let map_download = MapDownload::start(map);
                     self.state = State::Loading { map_download };
                 }
-                ServerMessage::StartRound { params }
-                    if matches!(self.state, State::WaitingToStart { .. }) =>
-                {
+
+                (ServerMessage::LoadedTooSlow, _) => {
+                    log::warn!("loaded too slow");
+                    self.state = State::WaitingToJoin;
+                }
+
+                (ServerMessage::StartRound { params }, State::WaitingToStart { map, .. }) => {
                     log::info!("starting round with params: {:?}", params);
-                    let map = match &self.state {
-                        State::WaitingToStart { map } => map.clone(),
-                        _ => unreachable!(),
-                    };
 
                     self.cache.clear();
                     let ctx = CreateContext {
@@ -205,33 +223,51 @@ impl Game {
                     let scene = map.to_scene(&ctx, &params);
 
                     self.state = State::Running {
-                        map,
+                        map: map.clone(),
                         scene,
-                        race_time: 0.0,
-                        race_completed: false,
+                        race_state: RaceState::Waiting,
                     };
                 }
+                (ServerMessage::StartRound { .. }, _) => {
+                    log::warn!("received StartRound message in invalid state");
+                }
 
-                ServerMessage::RaceUpdate {
-                    players,
-                    active_items,
-                    race_time: new_race_time,
-                } if matches!(self.state, State::Running { .. }) => {
-                    let scene = match &mut self.state {
-                        State::Running {
-                            scene, race_time, ..
-                        } => {
-                            *race_time = new_race_time;
-                            scene
-                        }
-                        _ => unreachable!(),
+                (ServerMessage::StartCountdown, State::Running { race_state, .. }) => {
+                    *race_state = RaceState::Countdown {
+                        current: 3,
+                        next: 0.0,
                     };
+                }
+                (ServerMessage::StartCountdown, _) => {
+                    log::warn!("received StartCountdown message in invalid state");
+                }
 
+                (ServerMessage::StartRace, State::Running { race_state, .. }) => {
+                    *race_state = RaceState::Running { race_time: 0.0 }
+                }
+                (ServerMessage::StartRace, _) => {
+                    log::warn!("received StartRace message in invalid state");
+                }
+
+                (
+                    ServerMessage::RaceUpdate {
+                        players,
+                        active_items,
+                        race_time: new_race_time,
+                    },
+                    State::Running {
+                        scene, race_state, ..
+                    },
+                ) => {
                     let ctx = CreateContext {
                         gl: &self.gl,
                         assets: &self.cache,
                         viewport: self.viewport,
                     };
+
+                    if let RaceState::Running { race_time } = race_state {
+                        *race_time = new_race_time;
+                    }
 
                     scene.items.clear();
                     scene.items.extend(
@@ -247,60 +283,70 @@ impl Game {
                     }
                 }
 
-                ServerMessage::PickUpStateChange { kind, index, state }
-                    if matches!(self.state, State::Running { .. }) =>
-                {
-                    let scene = match &mut self.state {
-                        State::Running { scene, .. } => scene,
-                        _ => unreachable!(),
-                    };
-
-                    match kind {
-                        PickupKind::Coin => {
-                            let coins = &mut scene.coins;
-                            if let Some(coin) = coins.get_mut(index) {
-                                coin.state = state;
-                            }
-                        }
-                        PickupKind::ItemBox => {
-                            let item_boxes = &mut scene.item_boxes;
-                            if let Some(item_box) = item_boxes.get_mut(index) {
-                                item_box.state = state;
-                            }
-                        }
-                    }
+                (ServerMessage::RaceUpdate { .. }, _) => {
+                    log::warn!("received RaceUpdate message in invalid state");
                 }
 
-                ServerMessage::PlayerCollision {
-                    normal,
-                    depth,
+                (
+                    ServerMessage::PickUpStateChange { kind, index, state },
+                    State::Running { scene, .. },
+                ) => match kind {
+                    PickupKind::Coin => {
+                        let coins = &mut scene.coins;
+                        if let Some(coin) = coins.get_mut(index) {
+                            coin.state = state;
+                        }
+                    }
+                    PickupKind::ItemBox => {
+                        let item_boxes = &mut scene.item_boxes;
+                        if let Some(item_box) = item_boxes.get_mut(index) {
+                            item_box.state = state;
+                        }
+                    }
+                },
+                (ServerMessage::PickUpStateChange { .. }, _) => {
+                    log::warn!("received PickUpStateChange message in invalid state");
+                }
 
-                    other_velocity,
-                    other_rotation,
-                } => {
-                    let scene = match &mut self.state {
-                        State::Running { scene, .. } => scene,
-                        _ => unreachable!(),
-                    };
+                (
+                    ServerMessage::PlayerCollision {
+                        normal,
+                        depth,
+
+                        other_velocity,
+                        other_rotation,
+                    },
+                    State::Running {
+                        scene,
+                        race_state: RaceState::Running { .. },
+                        ..
+                    },
+                ) => {
                     scene
                         .player
                         .apply_collision(normal, depth, other_velocity, other_rotation);
                 }
+                (ServerMessage::PlayerCollision { .. }, _) => {
+                    log::warn!("received PlayerCollision message in invalid state");
+                }
 
-                ServerMessage::HitByItem { player }
-                    if matches!(self.state, State::Running { .. }) =>
-                {
-                    let scene = match &mut self.state {
-                        State::Running { scene, .. } => scene,
-                        _ => unreachable!(),
-                    };
-
+                (ServerMessage::HitByItem { player }, State::Running { scene, .. }) => {
                     if player == scene.own_id {
                         scene.player.hit();
                     }
                 }
+                (ServerMessage::HitByItem { .. }, _) => {
+                    log::warn!("received HitByItem message in invalid state");
+                }
 
-                _ => log::warn!("ignoring unexpected message: {:?}", msg),
+                (ServerMessage::PlayerCountChanged { count }, _) => self.player_count = count,
+
+                (ServerMessage::EndRound { placements }, State::Running { race_state, .. }) => {
+                    *race_state = RaceState::RaceResults { placements };
+                }
+                (ServerMessage::EndRound { .. }, _) => {
+                    self.state = State::WaitingToJoin;
+                }
             }
         }
 
@@ -309,8 +355,7 @@ impl Game {
             State::Running {
                 scene,
                 map,
-                race_time,
-                race_completed,
+                race_state,
             } => {
                 let mut ctx = UpdateContext {
                     dt,
@@ -352,10 +397,25 @@ impl Game {
                     &mut self.cam,
                 );
 
-                if scene.player.track_pos.lap > 3 {
-                    *race_completed = true;
-                    let race_time = *race_time;
-                    self.send(ClientMessage::FinishRound { race_time });
+                match race_state {
+                    RaceState::Waiting => {}
+                    RaceState::Countdown { current, next } => {
+                        *next += dt;
+                        if *next >= 1.0 {
+                            *next -= 1.0;
+                            *current = current.saturating_sub(1);
+                        }
+                    }
+                    RaceState::Running { race_time } => {
+                        if scene.player.track_pos.lap > 3 {
+                            let race_time = *race_time;
+                            *race_state = RaceState::Completed;
+                            scene.player.input = Default::default();
+                            self.send(ClientMessage::FinishRound { race_time });
+                        }
+                    }
+                    RaceState::Completed => {}
+                    RaceState::RaceResults { .. } => {}
                 }
             }
             State::Loading { map_download } => {
@@ -373,7 +433,7 @@ impl Game {
                     map.metadata.name
                 );
                 self.send(ClientMessage::LoadedMap);
-                self.state = State::WaitingToStart { map };
+                self.state = State::WaitingToStart { map: Rc::new(map) };
                 // let objects = map.to_scene(&self.gl, params);
                 // let cam = Camera::new(60.0, self.viewport);
                 // self.state = State::Running { cam, objects, map };
@@ -399,7 +459,9 @@ impl Game {
         };
 
         match &self.state {
-            State::Running { scene, .. } => {
+            State::Running {
+                scene, race_state, ..
+            } => {
                 let mut depth_objects: Vec<(&dyn Object, f32)> = scene
                     .static_objects
                     .iter()
@@ -426,12 +488,37 @@ impl Game {
                 }
 
                 unsafe { self.gl.disable(glow::DEPTH_TEST) };
-                self.shared_assets.item_frame.render(&ctx);
+                match race_state {
+                    RaceState::Waiting => {}
+                    RaceState::Countdown { current, .. } => {
+                        self.shared_assets
+                            .render_countdown(&ctx, (*current).max(1) as u32);
+                    }
+                    RaceState::Running { .. } => {
+                        self.shared_assets.item_frame.render(&ctx);
+                        self.shared_assets
+                            .render_pos(&ctx, scene.player.place as u32);
+                    }
+                    RaceState::Completed => {}
+                    RaceState::RaceResults { placements } => {
+                        log::warn!("TODO: render race results")
+                    }
+                }
                 unsafe { self.gl.enable(glow::DEPTH_TEST) };
             }
+
+            State::WaitingToJoin => {
+                self.shared_assets.game_logo.render(&ctx);
+                self.shared_assets.join_waiting.render(&ctx);
+            }
+
+            State::WaitingToStart { .. } => {
+                self.shared_assets.game_logo.render(&ctx);
+                self.shared_assets.load_waiting.render(&ctx);
+            }
+
             _ => {
                 unsafe { self.gl.disable(glow::DEPTH_TEST) };
-                self.shared_assets.game_logo.render(&ctx);
                 unsafe { self.gl.enable(glow::DEPTH_TEST) };
 
                 log::warn!("todo: render state {}", self.state)
@@ -450,6 +537,12 @@ impl std::fmt::Debug for Game {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Game")
             .field("shaders", &self.shaders)
+            .field("viewport", &self.viewport)
+            .field("cam", &self.cam)
+            .field("ui_cam", &self.ui_cam)
+            .field("rng", &self.rng)
+            .field("cache", &self.cache)
+            .field("shared_assets", &self.shared_assets)
             .field("state", &self.state)
             .finish()
     }

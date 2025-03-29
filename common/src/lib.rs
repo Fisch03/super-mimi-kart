@@ -6,7 +6,7 @@ pub use map::TrackPosition;
 use types::*;
 
 pub const TICKS_PER_SECOND: f32 = 60.0;
-pub const COUNTDOWN_DURATION: f32 = 5.0;
+pub const COUNTDOWN_DURATION: f32 = 3.0;
 
 pub const MAP_SCALE: f32 = 20.0;
 
@@ -113,6 +113,7 @@ pub struct PlayerState {
     pub pos: Vec2,
     pub vel: f32,
     pub rot: f32,
+    pub visual_rot: f32,
     pub track_pos: TrackPosition,
     pub jump_height: f32,
 }

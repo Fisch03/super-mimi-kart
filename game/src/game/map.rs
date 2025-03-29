@@ -1,6 +1,6 @@
 use super::Scene;
-use crate::engine::{Camera, CreateContext, object::Object};
-use common::{RoundInitParams, map::*, map_coord_to_world, types::*};
+use crate::engine::{CreateContext, object::Object};
+use common::{RoundInitParams, map::*, map_coord_to_world};
 use nalgebra::Point2;
 use parry2d::shape::Polyline;
 use poll_promise::Promise;
@@ -27,9 +27,9 @@ impl MapToScene for Map {
         let map_image = &self.assets()[self.background.unwrap()].image;
         let map = objects::Map::new(ctx, &map_image);
 
-        let player_start = self.track.iter_starts().nth(params.start_pos).unwrap();
-        let player_start = map_coord_to_world(player_start);
-        let player = objects::Player::new(ctx, params.start_pos, player_start);
+        let (player_pos, player_rot) = self.track.iter_starts().nth(params.start_pos).unwrap();
+        let player_pos = map_coord_to_world(player_pos);
+        let player = objects::Player::new(ctx, params.start_pos, player_pos, player_rot);
 
         let players = params
             .players
@@ -37,9 +37,12 @@ impl MapToScene for Map {
             .enumerate()
             .filter(|(i, _)| *i != params.start_pos)
             .map(|(i, (id, name))| {
-                let start = self.track.iter_starts().nth(i).unwrap();
-                let start = map_coord_to_world(start);
-                (*id, objects::ExternalPlayer::new(ctx, name.clone(), start))
+                let (start_pos, start_rot) = self.track.iter_starts().nth(i).unwrap();
+                let start_pos = map_coord_to_world(start_pos);
+                (
+                    *id,
+                    objects::ExternalPlayer::new(ctx, name.clone(), start_pos, start_rot),
+                )
             })
             .collect();
 

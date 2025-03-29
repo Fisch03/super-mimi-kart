@@ -42,15 +42,18 @@ pub struct Player {
     physical_rot: f32,
 
     pub track_pos: TrackPosition,
-    place: usize,
+    pub place: usize,
 
-    input: Vec2,
+    pub input: Vec2,
     velocity: Vec2,
 
     offroad_since: Option<f64>,
     drift_state: DriftState,
     jump_progress: f32,
+
     hit_time: f32,
+    hit_rotation: f32,
+    hit_rotation_target: f32,
 
     coins: u32,
     use_item: bool,
@@ -100,9 +103,9 @@ impl DriftState {
 }
 
 impl Player {
-    pub fn new(ctx: &CreateContext, place: usize, pos: Vec2) -> Self {
+    pub fn new(ctx: &CreateContext, place: usize, pos: Vec2, rot: f32) -> Self {
         let mut transform = Transform::new();
-        transform.rot.y = 270.0; // TODO: load from map
+        transform.rot.y = rot;
         transform.pos = Vec3::new(pos.x, 0.0, pos.y);
 
         transform.rot.y += 360.0 * 50.0; // hack for broken rotation offset at negative values
@@ -129,6 +132,8 @@ impl Player {
             drift_state: DriftState::None,
             jump_progress: 1.0,
             hit_time: 0.0,
+            hit_rotation: 0.0,
+            hit_rotation_target: 0.0,
 
             camera_angle,
             collider: Ball::new(COLLIDER_RADIUS),
@@ -143,11 +148,13 @@ impl Player {
         item_boxes: &[ItemBox],
         cam: &mut Camera,
     ) {
-        self.place = players
-            .values()
-            .filter(|player| player.track_pos > self.track_pos)
-            .count()
-            + 1;
+        if players.len() > 0 {
+            self.place = players
+                .values()
+                .filter(|player| player.track_pos > self.track_pos)
+                .count()
+                + 1;
+        }
 
         for (index, coin) in coins.iter().enumerate().filter(|(_, coin)| coin.state) {
             if coin.pos().distance(self.physical_pos) < 0.6 {
@@ -233,7 +240,8 @@ impl Player {
     }
 
     pub fn hit(&mut self) {
-        log::error!("TODO: hit");
+        self.hit_time = 1.5;
+        self.hit_rotation_target = self.hit_rotation + 360.0 * 2.0;
     }
 
     pub fn key_down(&mut self, key: &str) {
@@ -396,8 +404,15 @@ impl Object for Player {
         let jump_height = f32::sin(self.jump_progress * std::f32::consts::PI) * 0.15;
         self.pos = Vec3::new(self.physical_pos.x, jump_height, self.physical_pos.y);
 
-        let target_rot =
-            self.physical_rot + self.drift_state.as_multiplier() * 75.0 + self.input.x * 15.0;
+        if self.hit_rotation_target > self.hit_rotation {
+            self.hit_rotation += ctx.dt * 360.0 * 3.0;
+        }
+
+        let target_rot = self.physical_rot
+            + self.drift_state.as_multiplier() * 75.0
+            + self.input.x * 15.0
+            + self.hit_rotation;
+
         self.rot.y = f32::lerp(self.rot.y, target_rot, ctx.dt * 5.0);
 
         // camera
@@ -411,6 +426,7 @@ impl Object for Player {
             ctx.send_msg(ClientMessage::PlayerUpdate(PlayerState {
                 pos: self.physical_pos,
                 rot: self.physical_rot,
+                visual_rot: self.rot.y,
                 vel: self.velocity.y,
 
                 jump_height,
@@ -476,10 +492,10 @@ pub struct ExternalPlayer {
 }
 
 impl ExternalPlayer {
-    pub fn new(ctx: &CreateContext, name: String, start: Vec2) -> Self {
+    pub fn new(ctx: &CreateContext, name: String, start: Vec2, rot: f32) -> Self {
         let transform = Transform::new()
             .position(start.x, -0.18, start.y)
-            .rotation(0.0, 270.0, 0.0);
+            .rotation(0.0, rot, 0.0);
 
         let billboard = load_player(ctx, transform);
 
@@ -493,7 +509,7 @@ impl ExternalPlayer {
 
     pub fn update_state(&mut self, state: PlayerState) {
         self.pos = Vec3::new(state.pos.x, state.jump_height - 0.18, state.pos.y);
-        self.rot = Rotation::new(0.0, state.rot, 0.0);
+        self.rot = Rotation::new(0.0, state.visual_rot, 0.0);
         self.track_pos = state.track_pos;
     }
 }
