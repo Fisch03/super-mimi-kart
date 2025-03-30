@@ -52,9 +52,9 @@ impl AssetCache {
         }
     }
 
-    // pub fn get_sheet(&self, name: &str) -> Option<SheetRef> {
-    //     self.sprites.borrow().get(name).cloned()
-    // }
+    pub fn get_sheet(&self, name: &str) -> Option<SheetRef> {
+        self.sprites.borrow().get(name).cloned()
+    }
 
     pub fn load_mesh<F: FnOnce() -> Mesh>(&self, name: &str, loader: F) -> MeshRef {
         if let Some(mesh) = self.meshes.borrow().get(name) {

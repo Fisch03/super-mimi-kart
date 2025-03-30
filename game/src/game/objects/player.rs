@@ -5,8 +5,8 @@ use crate::engine::{
 };
 use crate::game::objects::{Coin, ItemBox};
 use common::{
-    ActiveItemKind, ClientId, ClientMessage, ItemKind, PickupKind, PlayerState, map::TrackPosition,
-    map_coord_to_world, types::*, world_coord_to_map,
+    ActiveItemKind, ClientId, ClientMessage, ItemKind, MAP_SCALE, PickupKind, PlayerState,
+    map::TrackPosition, map_coord_to_world, types::*, world_coord_to_map,
 };
 use std::collections::HashMap;
 
@@ -60,7 +60,9 @@ pub struct Player {
     item: Option<ItemKind>,
 
     camera_angle: f32,
+
     collider: Ball,
+    collision_timeout: f32,
 }
 
 #[derive(Debug, PartialEq)]
@@ -83,13 +85,6 @@ impl DriftState {
             }
             DriftState::None | DriftState::Offroad => {}
             DriftState::Left | DriftState::Right => {}
-        }
-    }
-
-    fn is_drifting(&self) -> bool {
-        match self {
-            DriftState::Left | DriftState::Right => true,
-            DriftState::None | DriftState::Queued(_) | DriftState::Offroad => false,
         }
     }
 
@@ -119,14 +114,14 @@ impl Player {
             physical_pos: pos,
 
             track_pos: TrackPosition::default(),
-            place,
+            place: place + 1,
 
             input: Vec2::new(0.0, 0.0),
             velocity: Vec2::new(0.0, 0.0),
 
             coins: 0,
             use_item: false,
-            item: Some(ItemKind::RedShell),
+            item: Some(ItemKind::Banana),
 
             offroad_since: None,
             drift_state: DriftState::None,
@@ -136,7 +131,9 @@ impl Player {
             hit_rotation_target: 0.0,
 
             camera_angle,
+
             collider: Ball::new(COLLIDER_RADIUS),
+            collision_timeout: 0.0,
         }
     }
 
@@ -154,6 +151,26 @@ impl Player {
                 .filter(|player| player.track_pos > self.track_pos)
                 .count()
                 + 1;
+        }
+
+        self.collision_timeout -= ctx.dt;
+        let player_collider = Ball::new((4.0 / MAP_SCALE) * 2.0);
+        let own_pos = Isometry::new(Vector::new(self.physical_pos.x, self.physical_pos.y), 0.0);
+        for other in players.values() {
+            let other_pos = Isometry::new(Vector::new(other.pos.x, other.pos.z), 0.0);
+            if let Ok(Some(contact)) = parry2d::query::contact(
+                &own_pos,
+                &player_collider,
+                &other_pos,
+                &player_collider,
+                nalgebra::zero(),
+            ) {
+                let normal = Vec2::new(contact.normal2.x, contact.normal2.y);
+                let depth = -contact.dist / 2.0;
+                let other_velocity = other.velocity;
+                let other_rotation = other.physical_rot;
+                self.apply_collision(normal, depth, other_velocity, other_rotation);
+            }
         }
 
         for (index, coin) in coins.iter().enumerate().filter(|(_, coin)| coin.state) {
@@ -218,6 +235,18 @@ impl Player {
         other_velocity: f32,
         other_rotation: f32,
     ) {
+        if self.collision_timeout > 0.0 {
+            return;
+        }
+
+        log::info!(
+            "collision: {:?} {:?} {:?} {:?}",
+            normal,
+            depth,
+            other_velocity,
+            other_rotation
+        );
+
         self.physical_pos += normal * depth;
 
         let own_forward = Vec2::new(
@@ -233,10 +262,12 @@ impl Player {
         let other_new = self.velocity.y * amt;
         self.velocity.y = other_velocity * amt;
 
-        // add some extra bounce
-        let diff = other_new - self.velocity.y;
-        let factor = if diff > 0.0 { 0.75 } else { 0.25 };
-        self.velocity.y += diff * factor;
+        // // add some extra bounce
+        // let diff = other_new - self.velocity.y;
+        // let factor = if diff > 0.0 { 0.75 } else { 0.25 };
+        // self.velocity.y += diff * factor;
+
+        self.collision_timeout = 0.5;
     }
 
     pub fn hit(&mut self) {
@@ -487,6 +518,8 @@ impl AsRef<Transform> for Player {
 pub struct ExternalPlayer {
     billboard: Billboard,
     name: String,
+    velocity: f32,
+    physical_rot: f32,
 
     track_pos: TrackPosition,
 }
@@ -503,6 +536,9 @@ impl ExternalPlayer {
             billboard,
             name,
 
+            velocity: 0.0,
+            physical_rot: 0.0,
+
             track_pos: TrackPosition::default(),
         }
     }
@@ -510,6 +546,10 @@ impl ExternalPlayer {
     pub fn update_state(&mut self, state: PlayerState) {
         self.pos = Vec3::new(state.pos.x, state.jump_height - 0.18, state.pos.y);
         self.rot = Rotation::new(0.0, state.visual_rot, 0.0);
+
+        self.velocity = state.vel;
+        self.physical_rot = state.rot;
+
         self.track_pos = state.track_pos;
     }
 }

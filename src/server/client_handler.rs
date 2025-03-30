@@ -287,8 +287,14 @@ impl ClientManager {
             client.disconnect();
         } else if let Some(pos) = self.waiting_clients.iter().position(|c| c.id() == id) {
             self.waiting_clients.remove(pos).disconnect();
-        }
+        } else if let Some(pos) = self.loading_clients.iter().position(|c| c.id() == id) {
+            self.loading_clients.remove(pos).disconnect();
+        } else if let Some(pos) = self.finished_clients.iter().position(|(c, _)| c.id() == id) {
+            self.finished_clients.remove(pos).0.disconnect();
+        };
 
+        self.send(SendTo::InGameAll, ServerMessage::PlayerLeft(id))
+            .await;
         self.send(
             SendTo::All,
             ServerMessage::PlayerCountChanged {
@@ -451,7 +457,7 @@ impl ClientManager {
                 {
                     let handle = self.make_handle();
                     let handle = task::spawn(async move {
-                        time::sleep(Duration::from_secs(10)).await;
+                        time::sleep(Duration::from_secs(60)).await;
                         handle
                             .tx
                             .send(ClientManagerCommand::RaceTimeout)

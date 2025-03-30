@@ -31,10 +31,12 @@ features = [
     "Window",
     "Location",
     "HtmlCanvasElement", 
+    "DomRect",
 
     "Performance",
     "Event",
     "KeyboardEvent",
+    "MouseEvent",
 
     "Request",
     "RequestInit",

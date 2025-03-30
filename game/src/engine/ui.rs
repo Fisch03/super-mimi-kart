@@ -12,7 +12,7 @@ use crate::engine::{
 
 use common::types::*;
 
-const CHAR_SET: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,!?";
+// const CHAR_SET: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,!?";
 
 #[derive(Debug)]
 pub struct UiVec {
@@ -76,12 +76,19 @@ impl From<Ratio> for UiDim {
 pub struct Anchor(Vec2);
 
 impl Anchor {
+    #[allow(dead_code)]
     pub const CENTER: Self = Self::new(0.0, 0.0);
+    #[allow(dead_code)]
     pub const TOP_LEFT: Self = Self::new(1.0, 1.0);
+    #[allow(dead_code)]
     pub const TOP_CENTER: Self = Self::new(0.0, 1.0);
+    #[allow(dead_code)]
     pub const TOP_RIGHT: Self = Self::new(-1.0, 1.0);
+    #[allow(dead_code)]
     pub const BOTTOM_LEFT: Self = Self::new(1.0, -1.0);
+    #[allow(dead_code)]
     pub const BOTTOM_CENTER: Self = Self::new(0.0, -1.0);
+    #[allow(dead_code)]
     pub const BOTTOM_RIGHT: Self = Self::new(-1.0, -1.0);
 
     pub const fn new(x: f32, y: f32) -> Self {
@@ -150,6 +157,10 @@ impl UiSprite {
     pub fn anchor(self, anchor: Anchor) -> Self {
         self.local_anchor(anchor).global_anchor(anchor)
     }
+    pub fn set_anchor(&mut self, anchor: Anchor) {
+        self.local_anchor = anchor;
+        self.global_anchor = anchor;
+    }
 
     pub fn local_anchor(self, anchor: Anchor) -> Self {
         Self {
@@ -165,6 +176,7 @@ impl UiSprite {
         }
     }
 
+    #[allow(dead_code)]
     pub fn width(&self, ctx: &RenderContext) -> f32 {
         self.width.calculate(
             ctx.viewport.x / 2.0,
@@ -172,6 +184,7 @@ impl UiSprite {
         )
     }
 
+    #[allow(dead_code)]
     pub fn height(&self, ctx: &RenderContext) -> f32 {
         self.width(ctx) * self.aspect
     }
@@ -198,127 +211,19 @@ impl UiSprite {
 
         self.mesh.get().render_ui(ctx, &transform);
     }
-}
 
-// #[derive(Debug, Clone)]
-// pub struct FontAtlas(Rc<HashMap<char, (MeshRef, SheetRef)>>);
-//
-// #[derive(Debug)]
-// pub struct Font {
-//     pub atlas: FontAtlas,
-//
-//     pub pos: UiVec,
-//     pub local_anchor: Anchor,
-//     pub global_anchor: Anchor,
-// }
-//
-// impl Font {
-//     pub fn load(ctx: &CreateContext, name: &str, pos: UiVec) -> Self {
-//         use std::io::{BufReader, Cursor};
-//
-//         let bdf_file = ASSETS.get_file(name).unwrap().contents();
-//         let bdf_file = BufReader::new(Cursor::new(bdf_file));
-//         let font = BdfFont::read(bdf_file).unwrap();
-//
-//         log::info!("'{}' loaded - {:?}", name, font.size());
-//
-//         let atlas = CHAR_SET
-//             .chars()
-//             .map(|c| {
-//                 let sheet = ctx.assets.load_sheet(&format!("{}_{}", name, c), || {
-//                     let glyph = font.glyph(c).unwrap();
-//                     let bitmap = glyph.bitmap();
-//                     let bounds = glyph.bounding_box();
-//                     let img = ImageBuffer::from_fn(bounds.width, bounds.height, |x, y| {
-//                         let filled = bitmap.get(x as usize, y as usize).unwrap_or(false);
-//                         if filled {
-//                             image::Rgb([255, 255, 255])
-//                         } else {
-//                             image::Rgb([0, 0, 0])
-//                         }
-//                     });
-//                     SpriteSheet::from_images(ctx, &[&DynamicImage::ImageRgb8(img)])
-//                 });
-//
-//                 let mesh = ctx.assets.load_mesh(&format!("{}_{}", name, c), || {
-//                     Mesh::new(ctx, MeshData::QUAD, sheet.clone())
-//                 });
-//
-//                 (c, (mesh, sheet))
-//             })
-//             .collect::<HashMap<_, _>>();
-//
-//         Self {
-//             atlas: FontAtlas(Rc::new(atlas)),
-//             pos,
-//             local_anchor: Anchor::CENTER,
-//             global_anchor: Anchor::TOP_LEFT,
-//         }
-//     }
-//
-//     pub fn anchor(self, anchor: Anchor) -> Self {
-//         self.local_anchor(anchor).global_anchor(anchor)
-//     }
-//
-//     pub fn local_anchor(self, anchor: Anchor) -> Self {
-//         Self {
-//             local_anchor: anchor,
-//             ..self
-//         }
-//     }
-//
-//     pub fn global_anchor(self, anchor: Anchor) -> Self {
-//         Self {
-//             global_anchor: anchor,
-//             ..self
-//         }
-//     }
-//
-//     pub fn render(&self, ctx: &RenderContext, text: &str) {
-//         let text_width = text
-//             .chars()
-//             .map(|c| {
-//                 self.atlas.0.get(&c).map_or(0.0, |(_, sheet)| {
-//                     sheet.get().sprite_dimensions().x as f32 * 2.0
-//                 })
-//             })
-//             .sum::<f32>();
-//
-//         let text_height = self
-//             .atlas
-//             .0
-//             .values()
-//             .next()
-//             .unwrap()
-//             .1
-//             .get()
-//             .sprite_dimensions()
-//             .y as f32;
-//
-//         let text_dim = Vec2::new(text_width, text_height);
-//
-//         let local_offset = self.local_anchor.as_vec() * text_dim;
-//
-//         let half_viewport = ctx.viewport / 2.0;
-//         let global_offset = self.global_anchor.as_vec() * half_viewport;
-//
-//         let position = half_viewport + self.pos.calculate(ctx.viewport, text_dim) - global_offset
-//             + local_offset;
-//
-//         let mut x = position.x;
-//         for c in text.chars() {
-//             if let Some((mesh, sheet)) = self.atlas.0.get(&c) {
-//                 let sprite_dim = sheet.get().sprite_dimensions();
-//
-//                 let position = Vec2::new(x, position.y);
-//                 let transform = Transform::new()
-//                     .position(position.x.round(), position.y.round(), 0.0)
-//                     .rotation(-90.0, 0.0, 0.0)
-//                     .scale(sprite_dim.x as f32, 1.0, sprite_dim.y as f32);
-//
-//                 mesh.get().render_ui(ctx, &transform);
-//                 x += sprite_dim.x as f32 * 2.0;
-//             }
-//         }
-//     }
-// }
+    pub fn hovered(&self, viewport: Vec2, pos: Vec2) -> bool {
+        let sprite_dim = self.sheet.get().sprite_dimensions();
+        let sprite_dim = Vec2::new(sprite_dim.x as f32, sprite_dim.y as f32);
+        let width = self.width.calculate(viewport.x / 2.0, sprite_dim.x);
+        let half_size = Vec2::new(width, width * self.aspect);
+        let local_offset = self.local_anchor.as_vec() * half_size;
+        let half_viewport = viewport / 2.0;
+        let global_offset = self.global_anchor.as_vec() * half_viewport;
+        let position =
+            half_viewport + self.pos.calculate(viewport, sprite_dim) - global_offset + local_offset;
+        let min = position - half_size;
+        let max = position + half_size;
+        pos.x >= min.x && pos.x <= max.x && pos.y >= min.y && pos.y <= max.y
+    }
+}

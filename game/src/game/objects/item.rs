@@ -3,43 +3,31 @@ use crate::engine::{
     cache::MeshRef,
     mesh::Mesh,
     object::{Object, Transform},
+    sprite::{Billboard, SpriteSheet},
 };
 use common::{ActiveItem, ActiveItemKind, types::*};
 
 #[derive(Debug)]
 pub struct Item {
-    transform: Transform,
     state: ItemState,
 }
 
 #[derive(Debug)]
 enum ItemState {
-    RedShell { mesh: MeshRef },
-    GreenShell { mesh: MeshRef },
-    Banana { mesh: MeshRef },
+    RedShell { transform: Transform, mesh: MeshRef },
+    GreenShell { transform: Transform, mesh: MeshRef },
+    Banana { billboard: Billboard },
 }
 
 impl Item {
     pub fn preload_assets(ctx: &CreateContext) {
         ctx.assets
             .load_mesh("chorb", || Mesh::load(&ctx, "chorb.glb"));
+        ctx.assets
+            .load_sheet("banana", || SpriteSheet::load_single(&ctx, "yuri.png"));
     }
 
     pub fn new(ctx: &CreateContext, item: ActiveItem) -> Self {
-        let state = match item.kind {
-            ActiveItemKind::RedShell { .. } => ItemState::RedShell {
-                mesh: ctx.assets.get_mesh("chorb").unwrap(),
-            },
-
-            ActiveItemKind::GreenShell { .. } => ItemState::GreenShell {
-                mesh: ctx.assets.get_mesh("chorb").unwrap(),
-            },
-
-            ActiveItemKind::Banana => ItemState::Banana {
-                mesh: ctx.assets.get_mesh("chorb").unwrap(),
-            },
-        };
-
         let roll = match item.kind {
             ActiveItemKind::RedShell { roll } | ActiveItemKind::GreenShell { roll } => roll,
             ActiveItemKind::Banana => 0.0,
@@ -50,24 +38,51 @@ impl Item {
         transform.scale_uniform(0.2);
         transform.rot = Rotation::new(roll, -item.rot + 90.0, 0.0);
 
-        Self { transform, state }
+        let state = match item.kind {
+            ActiveItemKind::RedShell { .. } => ItemState::RedShell {
+                mesh: ctx.assets.get_mesh("chorb").unwrap(),
+                transform,
+            },
+
+            ActiveItemKind::GreenShell { .. } => ItemState::GreenShell {
+                mesh: ctx.assets.get_mesh("chorb").unwrap(),
+                transform,
+            },
+
+            ActiveItemKind::Banana => {
+                let sheet = ctx.assets.get_sheet("banana").unwrap();
+                let mut billboard = Billboard::new(&ctx, "banana", sheet);
+                billboard.transform = transform;
+                billboard.transform.scale_uniform(0.3);
+
+                ItemState::Banana { billboard }
+            }
+        };
+
+        Self { state }
     }
 }
 
 impl Object for Item {
-    fn update(&mut self, _ctx: &mut UpdateContext) {}
-
     fn render(&self, ctx: &RenderContext) {
         match &self.state {
-            ItemState::RedShell { mesh }
-            | ItemState::GreenShell { mesh }
-            | ItemState::Banana { mesh } => mesh.get().render(ctx, &self.transform),
+            ItemState::RedShell { mesh, transform } | ItemState::GreenShell { mesh, transform } => {
+                mesh.get().render(ctx, &transform);
+            }
+            ItemState::Banana { billboard } => {
+                billboard.render(ctx);
+            }
         }
     }
 }
 
 impl AsRef<Transform> for Item {
     fn as_ref(&self) -> &Transform {
-        &self.transform
+        match &self.state {
+            ItemState::RedShell { transform, .. } | ItemState::GreenShell { transform, .. } => {
+                transform
+            }
+            ItemState::Banana { billboard } => &billboard.transform,
+        }
     }
 }

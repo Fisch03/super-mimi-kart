@@ -102,11 +102,12 @@ pub fn start() {
             .unwrap()
             .dyn_into::<web_sys::HtmlCanvasElement>()
             .unwrap();
+        let canvas = Rc::new(canvas);
 
         let mut time = performance.now();
         let mut next_tick = time;
 
-        game.borrow_mut().connect();
+        // game.borrow_mut().connect();
 
         // --- main loop ---
         let main_loop = Rc::new(RefCell::new(None));
@@ -146,6 +147,7 @@ pub fn start() {
         }
 
         // --- resize ---
+        let canvas_clone = canvas.clone();
         add_event_listener!("resize", web_sys::Event, |game: GameRef, _| {
             let dim = Vec2::new(
                 window.inner_width().unwrap().as_f64().unwrap() as f32,
@@ -157,8 +159,8 @@ pub fn start() {
 
             let dim = dim / scale;
 
-            canvas.set_width(dim.x as u32);
-            canvas.set_height(dim.y as u32);
+            canvas_clone.set_width(dim.x as u32);
+            canvas_clone.set_height(dim.y as u32);
 
             game.borrow_mut().resize(dim)
         });
@@ -176,6 +178,41 @@ pub fn start() {
             web_sys::KeyboardEvent,
             |game: GameRef, e: web_sys::KeyboardEvent| {
                 game.borrow_mut().key_up(e.code());
+            }
+        );
+
+        let canvas_clone = canvas.clone();
+        add_event_listener!(
+            "mousemove",
+            web_sys::MouseEvent,
+            |game: GameRef, e: web_sys::MouseEvent| {
+                let rect = canvas_clone.get_bounding_client_rect();
+
+                let scale = Vec2::new(
+                    canvas.width() as f32 / rect.width() as f32,
+                    canvas.height() as f32 / rect.height() as f32,
+                );
+
+                let pos = Vec2::new(
+                    (e.client_x() as f32 - rect.left() as f32) * scale.x,
+                    (e.client_y() as f32 - rect.top() as f32) * scale.y,
+                );
+
+                game.borrow_mut().mouse_move(pos);
+            }
+        );
+        add_event_listener!(
+            "mousedown",
+            web_sys::MouseEvent,
+            |game: GameRef, e: web_sys::MouseEvent| {
+                game.borrow_mut().mouse_down();
+            }
+        );
+        add_event_listener!(
+            "mouseup",
+            web_sys::MouseEvent,
+            |game: GameRef, e: web_sys::MouseEvent| {
+                game.borrow_mut().mouse_up();
             }
         );
 

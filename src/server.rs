@@ -74,7 +74,7 @@ impl GameServer {
             #[cfg(not(debug_assertions))]
             let wait_time = 20;
             #[cfg(debug_assertions)]
-            let wait_time = 2;
+            let wait_time = 5;
 
             log::info!("waiting {} seconds for players to join", wait_time);
             tokio::time::sleep(Duration::from_secs(wait_time)).await;

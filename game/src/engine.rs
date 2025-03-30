@@ -52,6 +52,7 @@ pub struct RenderContext<'a> {
     pub shaders: &'a Shaders,
     pub assets: &'a AssetCache,
     pub viewport: Vec2,
+    pub mouse_pos: Vec2,
 }
 
 impl AsRef<AssetCache> for RenderContext<'_> {

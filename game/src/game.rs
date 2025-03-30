@@ -19,6 +19,10 @@ use assets::SharedAssets;
 
 #[derive(Debug)]
 enum State {
+    MainMenu {
+        click: bool,
+        show_credits: bool,
+    },
     WaitingToJoin,
     Loading {
         map_download: MapDownload,
@@ -38,7 +42,7 @@ enum RaceState {
     Waiting,
     Countdown { current: u32, next: f32 },
     Running { race_time: f32 },
-    Completed,
+    Completed { place: usize },
     RaceResults { placements: Vec<Placement> },
 }
 
@@ -63,6 +67,7 @@ struct Scene {
 impl std::fmt::Display for State {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            State::MainMenu { .. } => write!(f, "MainMenu"),
             State::WaitingToJoin => write!(f, "WaitingToJoin"),
             State::Loading { .. } => write!(f, "Loading"),
             State::WaitingToStart { .. } => write!(f, "WaitingToStart"),
@@ -74,6 +79,9 @@ impl std::fmt::Display for State {
 pub struct Game {
     ws: WebSocket,
     ws_rx: mpsc::Receiver<ServerMessage>,
+
+    mouse_pos: Vec2,
+    hide_cursor: bool,
 
     gl: glow::Context,
     shaders: Shaders,
@@ -105,7 +113,7 @@ impl Game {
             gl.enable(glow::BLEND);
             gl.enable(glow::CULL_FACE);
             gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
-            gl.clear_color(0.0, 0.0, 0.0, 1.0);
+            gl.clear_color(0.3, 0.3, 0.3, 1.0);
         }
 
         // let ctx = CreateContext {
@@ -130,6 +138,9 @@ impl Game {
             ws_rx,
             gl,
 
+            mouse_pos: Vec2::default(),
+            hide_cursor: false,
+
             shaders,
             viewport,
             ui_cam: UiCamera::new(viewport),
@@ -139,7 +150,10 @@ impl Game {
 
             rng,
 
-            state: State::WaitingToJoin,
+            state: State::MainMenu {
+                click: false,
+                show_credits: false,
+            },
 
             cache,
             shared_assets,
@@ -150,6 +164,7 @@ impl Game {
         self.send(ClientMessage::Register {
             name: "cool player".to_string(),
         });
+        self.state = State::WaitingToJoin;
     }
 
     pub fn resize(&mut self, dim: Vec2) {
@@ -159,6 +174,20 @@ impl Game {
         self.cam.resize(dim);
         self.ui_cam.resize(dim);
     }
+
+    pub fn mouse_move(&mut self, pos: Vec2) {
+        self.mouse_pos = pos;
+        self.hide_cursor = false;
+    }
+    pub fn mouse_down(&mut self) {
+        match &mut self.state {
+            State::MainMenu { click, .. } => {
+                *click = true;
+            }
+            _ => {}
+        }
+    }
+    pub fn mouse_up(&mut self) {}
 
     pub fn key_down(&mut self, key: String) {
         match &mut self.state {
@@ -171,6 +200,7 @@ impl Game {
             }
             _ => {}
         }
+        self.hide_cursor = true;
     }
     pub fn key_up(&mut self, key: String) {
         match &mut self.state {
@@ -308,28 +338,27 @@ impl Game {
                     log::warn!("received PickUpStateChange message in invalid state");
                 }
 
-                (
-                    ServerMessage::PlayerCollision {
-                        normal,
-                        depth,
-
-                        other_velocity,
-                        other_rotation,
-                    },
-                    State::Running {
-                        scene,
-                        race_state: RaceState::Running { .. },
-                        ..
-                    },
-                ) => {
-                    scene
-                        .player
-                        .apply_collision(normal, depth, other_velocity, other_rotation);
-                }
-                (ServerMessage::PlayerCollision { .. }, _) => {
-                    log::warn!("received PlayerCollision message in invalid state");
-                }
-
+                // (
+                //     ServerMessage::PlayerCollision {
+                //         normal,
+                //         depth,
+                //
+                //         other_velocity,
+                //         other_rotation,
+                //     },
+                //     State::Running {
+                //         scene,
+                //         race_state: RaceState::Running { .. },
+                //         ..
+                //     },
+                // ) => {
+                //     scene
+                //         .player
+                //         .apply_collision(normal, depth, other_velocity, other_rotation);
+                // }
+                // (ServerMessage::PlayerCollision { .. }, _) => {
+                //     log::warn!("received PlayerCollision message in invalid state");
+                // }
                 (ServerMessage::HitByItem { player }, State::Running { scene, .. }) => {
                     if player == scene.own_id {
                         scene.player.hit();
@@ -340,6 +369,11 @@ impl Game {
                 }
 
                 (ServerMessage::PlayerCountChanged { count }, _) => self.player_count = count,
+                (ServerMessage::PlayerLeft(id), _) => {
+                    if let State::Running { scene, .. } = &mut self.state {
+                        scene.players.remove(&id);
+                    }
+                }
 
                 (ServerMessage::EndRound { placements }, State::Running { race_state, .. }) => {
                     *race_state = RaceState::RaceResults { placements };
@@ -409,12 +443,14 @@ impl Game {
                     RaceState::Running { race_time } => {
                         if scene.player.track_pos.lap > 3 {
                             let race_time = *race_time;
-                            *race_state = RaceState::Completed;
+                            *race_state = RaceState::Completed {
+                                place: scene.player.place,
+                            };
                             scene.player.input = Default::default();
                             self.send(ClientMessage::FinishRound { race_time });
                         }
                     }
-                    RaceState::Completed => {}
+                    RaceState::Completed { .. } => {}
                     RaceState::RaceResults { .. } => {}
                 }
             }
@@ -438,6 +474,29 @@ impl Game {
                 // let cam = Camera::new(60.0, self.viewport);
                 // self.state = State::Running { cam, objects, map };
             }
+            State::MainMenu {
+                click,
+                show_credits,
+            } => {
+                if *click {
+                    *click = false;
+
+                    if self
+                        .shared_assets
+                        .credits_button
+                        .hovered(self.viewport, self.mouse_pos)
+                        || *show_credits
+                    {
+                        *show_credits = !*show_credits;
+                    } else if self
+                        .shared_assets
+                        .start_button
+                        .hovered(self.viewport, self.mouse_pos)
+                    {
+                        self.connect();
+                    }
+                }
+            }
             _ => {}
         }
 
@@ -456,6 +515,8 @@ impl Game {
 
             cam: &self.cam,
             ui_cam: &self.ui_cam,
+
+            mouse_pos: self.mouse_pos,
         };
 
         match &self.state {
@@ -499,8 +560,19 @@ impl Game {
                         self.shared_assets
                             .render_pos(&ctx, scene.player.place as u32);
                     }
-                    RaceState::Completed => {}
+                    RaceState::Completed { place } => {
+                        self.shared_assets.render_pos_centered(&ctx, *place as u32);
+                    }
                     RaceState::RaceResults { placements } => {
+                        let place = placements
+                            .iter()
+                            .position(|p| p.client_id == scene.own_id)
+                            .map(|p| p + 1);
+
+                        if let Some(place) = place {
+                            self.shared_assets.render_pos_centered(&ctx, place as u32);
+                        }
+
                         log::warn!("TODO: render race results")
                     }
                 }
@@ -508,22 +580,43 @@ impl Game {
             }
 
             State::WaitingToJoin => {
+                unsafe { self.gl.disable(glow::DEPTH_TEST) };
+
                 self.shared_assets.game_logo.render(&ctx);
                 self.shared_assets.join_waiting.render(&ctx);
             }
 
             State::WaitingToStart { .. } => {
+                unsafe { self.gl.disable(glow::DEPTH_TEST) };
+
                 self.shared_assets.game_logo.render(&ctx);
                 self.shared_assets.load_waiting.render(&ctx);
             }
-
-            _ => {
+            State::Loading { .. } => {
                 unsafe { self.gl.disable(glow::DEPTH_TEST) };
-                unsafe { self.gl.enable(glow::DEPTH_TEST) };
 
-                log::warn!("todo: render state {}", self.state)
+                self.shared_assets.game_logo.render(&ctx);
+                self.shared_assets.download_waiting.render(&ctx);
+            }
+
+            State::MainMenu { show_credits, .. } => {
+                unsafe { self.gl.disable(glow::DEPTH_TEST) };
+
+                self.shared_assets.game_logo.render(&ctx);
+
+                if *show_credits {
+                    self.shared_assets.credits.render(&ctx);
+                } else {
+                    self.shared_assets.render_menu(&ctx);
+                }
             }
         }
+
+        if !self.hide_cursor {
+            self.shared_assets.render_cursor(&ctx);
+        }
+
+        unsafe { self.gl.enable(glow::DEPTH_TEST) };
     }
 }
 

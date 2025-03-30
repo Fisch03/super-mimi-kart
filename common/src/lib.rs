@@ -29,6 +29,7 @@ pub enum ServerMessage {
     PlayerCountChanged {
         count: usize,
     },
+    PlayerLeft(ClientId),
 
     // map load took to long, player has been kicked to lobby
     LoadedTooSlow,
@@ -64,12 +65,12 @@ pub enum ServerMessage {
         player: ClientId,
     },
 
-    PlayerCollision {
-        depth: f32,
-        other_velocity: f32,
-        other_rotation: f32,
-        normal: Vec2,
-    },
+    // PlayerCollision {
+    //     depth: f32,
+    //     other_velocity: f32,
+    //     other_rotation: f32,
+    //     normal: Vec2,
+    // },
 
     // round has ended, show placements
     EndRound {
