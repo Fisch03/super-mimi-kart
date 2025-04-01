@@ -5,7 +5,7 @@ use web_sys::WebSocket;
 
 use crate::engine::{
     Camera, CreateContext, RenderContext, Shaders, UiCamera, UpdateContext, cache::AssetCache,
-    object::Object,
+    object::Object, sprite::{Billboard, BillboardMode}
 };
 use common::{ClientId, ClientMessage, PickupKind, Placement, ServerMessage, map::Map, types::*};
 
@@ -58,6 +58,7 @@ struct Scene {
     coins: Vec<objects::Coin>,
     item_boxes: Vec<objects::ItemBox>,
     items: Vec<objects::Item>,
+    explosions: Vec<Billboard>,
 
     map: objects::Map,
 
@@ -360,8 +361,33 @@ impl Game {
                 //     log::warn!("received PlayerCollision message in invalid state");
                 // }
                 (ServerMessage::HitByItem { player }, State::Running { scene, .. }) => {
+                    let ctx = CreateContext {
+                        gl: &self.gl,
+                        assets: &self.cache,
+                        viewport: self.viewport,
+                    };
+
+                    let player: Option<&dyn Object> = 
                     if player == scene.own_id {
                         scene.player.hit();
+                        
+                        Some(&scene.player)
+                    } else if let Some(player) = scene.players.get(&player) {
+                        Some(player)
+                    } else {
+                        None
+                    };
+
+                    if let Some(player) = player {
+                        let to_camera = player.as_ref().pos - self.cam.transform.pos;
+
+                        let mut billboard = Billboard::new(
+                            &ctx,
+                            "explosion",
+                            self.shared_assets.explosion.clone(),
+                        );
+                        billboard.transform.pos = player.as_ref().pos + to_camera.normalize() * -0.05;
+                        scene.explosions.push(billboard);
                     }
                 }
                 (ServerMessage::HitByItem { .. }, _) => {
@@ -431,6 +457,18 @@ impl Game {
                     &mut self.cam,
                 );
 
+                let explosion_frames = self.shared_assets.explosion.get().sprite_amount();
+                scene
+                    .explosions
+                    .retain(|explosion| if let BillboardMode::Static { index } = explosion.mode {
+                        index < explosion_frames - 1
+                    } else {
+                        false
+                    });
+                for explosion in scene.explosions.iter_mut() {
+                    explosion.next_frame();
+                }
+
                 match race_state {
                     RaceState::Waiting => {}
                     RaceState::Countdown { current, next } => {
@@ -447,6 +485,7 @@ impl Game {
                                 place: scene.player.place,
                             };
                             scene.player.input = Default::default();
+                            scene.player.drift_state = Default::default();
                             self.send(ClientMessage::FinishRound { race_time });
                         }
                     }
@@ -534,6 +573,7 @@ impl Game {
                     .chain(scene.coins.iter().map(|o| o as &dyn Object))
                     .chain(scene.item_boxes.iter().map(|o| o as &dyn Object))
                     .chain(scene.items.iter().map(|o| o as &dyn Object))
+                    .chain(scene.explosions.iter().map(|o| o as &dyn Object))
                     .map(|o| {
                         let depth = o.as_ref().camera_depth(&self.cam);
                         (o, depth)

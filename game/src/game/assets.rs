@@ -1,8 +1,7 @@
 use crate::engine::{
-    CreateContext, RenderContext, mesh::Mesh, object::Transform, sprite::Skybox, ui::*,
+    CreateContext, RenderContext, mesh::Mesh, object::Transform, sprite::{Skybox, SpriteSheet}, ui::*, cache::SheetRef,
 };
 use common::{ItemKind, types::*};
-use glow::HasContext;
 
 #[derive(Debug)]
 pub struct SharedAssets {
@@ -19,6 +18,7 @@ pub struct SharedAssets {
     pub red_shell_icon: UiMesh,
     pub green_shell_icon: UiMesh,
     pub boost_icon: UiSprite,
+    pub explosion: SheetRef,
 
     pub countdown: UiSprite,
     pub pos_indicator: UiSprite,
@@ -65,7 +65,7 @@ impl SharedAssets {
             transform: Transform::new().scale(7.0, 7.0, 7.0),
             mesh: green_shell_mesh,
         };
-        let boost_icon = UiSprite::load_single(&ctx, "placeholder.png", UiVec::new(Px(-9), Px(7)))
+        let boost_icon = UiSprite::load_single(&ctx, "saber.png", UiVec::new(Px(-9), Px(7)))
             .anchor(Anchor::TOP_RIGHT);
 
         let countdown = UiSprite::load_multi(&ctx, "pos_indicator", UiVec::new(Px(0), Pct(20.0)))
@@ -112,6 +112,10 @@ impl SharedAssets {
         cursor.width = Ratio(0.5).into();
         cursor.layer = 99;
 
+        let explosion = ctx.assets.load_sheet("explosion", || {
+            SpriteSheet::load_multi(&ctx, "explosion")
+        });
+
         Self {
             skybox: Skybox::load(&ctx, "skybox"),
 
@@ -121,6 +125,7 @@ impl SharedAssets {
             red_shell_icon,
             green_shell_icon,
             boost_icon,
+            explosion,
 
             start_button,
             credits_button,

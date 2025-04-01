@@ -50,6 +50,7 @@ enum RedShellTarget {
         target_id: ClientId,
         track_pos: TrackPosition,
         on_track: bool,
+        homing: bool,
     },
 }
 
@@ -132,6 +133,7 @@ impl ActiveItem {
                             target_id: n.id,
                             track_pos,
                             on_track: false,
+                            homing: false,
                         }
                     })
                     .unwrap_or(RedShellTarget::None);
@@ -178,15 +180,17 @@ impl ActiveItem {
                         target_id,
                         track_pos,
                         on_track,
+                        homing,
                     } => {
                         if let Some(target) = clients.get(target_id) {
                             let mut future_pos = *track_pos;
                             map.track
                                 .advance_position(SHELL_SPEED * 4.0 * MAP_SCALE, &mut future_pos);
 
-                            if target.state.track_pos < future_pos {
+                            if target.state.track_pos < future_pos || *homing  {
                                 let direction = (target.state.pos - self.pos).normalize();
                                 self.pos += direction * SHELL_SPEED;
+                                *homing = true;
                             } else {
                                 let mut advance = (SHELL_SPEED / 2.0) * MAP_SCALE;
                                 if !*on_track {

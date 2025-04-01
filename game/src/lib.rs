@@ -170,14 +170,18 @@ pub fn start() {
             "keydown",
             web_sys::KeyboardEvent,
             |game: GameRef, e: web_sys::KeyboardEvent| {
-                game.borrow_mut().key_down(e.code());
+                if !e.repeat() {
+                    game.borrow_mut().key_down(e.code());
+                }
             }
         );
         add_event_listener!(
             "keyup",
             web_sys::KeyboardEvent,
             |game: GameRef, e: web_sys::KeyboardEvent| {
-                game.borrow_mut().key_up(e.code());
+                if !e.repeat() {
+                    game.borrow_mut().key_up(e.code());
+                }
             }
         );
 

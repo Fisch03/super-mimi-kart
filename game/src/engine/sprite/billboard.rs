@@ -2,7 +2,7 @@ use crate::engine::{
     Camera, CreateContext, RenderContext,
     cache::*,
     mesh::{Mesh, MeshData},
-    object::Transform,
+    object::{Transform, Object},
     sprite::SpriteSheetUniforms,
 };
 use common::types::*;
@@ -12,13 +12,24 @@ use glow::*;
 pub struct Billboard {
     pub transform: Transform,
     mesh: MeshRef,
-    pub rotation_offset: f32,
+    pub sheet: SheetRef,
+    pub mode: BillboardMode,
+}
+
+#[derive(Debug)]
+pub enum BillboardMode {
+    Static {
+        index: u32,
+    },
+    Rotate {
+        offset: f32,
+    }
 }
 
 impl Billboard {
-    pub fn new(ctx: &CreateContext, name: &str, sheet_ref: SheetRef) -> Self {
+    pub fn new(ctx: &CreateContext, name: &str, sheet: SheetRef) -> Self {
         let aspect = {
-            let sheet = sheet_ref.get();
+            let sheet = sheet.get();
             sheet.sprite_dimensions().x as f32 / sheet.sprite_dimensions().y as f32
         };
 
@@ -26,12 +37,19 @@ impl Billboard {
 
         let mesh = ctx
             .assets
-            .load_mesh(name, || Mesh::new(ctx, MeshData::QUAD, sheet_ref));
+            .load_mesh(name, || Mesh::new(ctx, MeshData::QUAD, sheet.clone()));
 
         Self {
             transform,
             mesh,
-            rotation_offset: 0.0,
+            sheet,
+            mode: BillboardMode::Static { index: 0 },
+        }
+    }
+
+    pub fn next_frame(&mut self) {
+        if let BillboardMode::Static { index } = self.mode {
+            self.mode = BillboardMode::Static { index: (index + 1) % self.sheet.get().sprite_amount() };
         }
     }
 
@@ -53,22 +71,28 @@ impl Billboard {
         model_loc: &UniformLocation,
         sprite_sheet_uniforms: &SpriteSheetUniforms,
     ) {
-        let forward = Vec2::new(1.0, 0.0);
-        let to_cam = ctx.cam.transform.pos - self.transform.pos;
-        let to_cam = Vec2::new(to_cam.x, to_cam.z); // project onto xz plane, ignore y
-        let angle = (to_cam.angle_to(forward)
-            + self.rotation_offset.to_radians()
-            + self.rot.y.to_radians())
-            % (std::f32::consts::PI * 2.0);
-
         let mesh = self.mesh.get();
         let primitive = mesh.primitives.first().unwrap();
 
-        let sprite_amt = primitive.sprite_ref.get().sprite_amount();
+        let sprite_index = match self.mode {
+            BillboardMode::Static { index } => index,
+            BillboardMode::Rotate { offset } => {
+                let forward = Vec2::new(1.0, 0.0);
+                let to_cam = ctx.cam.transform.pos - self.transform.pos;
+                let to_cam = Vec2::new(to_cam.x, to_cam.z); // project onto xz plane, ignore y
+                let angle = (to_cam.angle_to(forward)
+                    + offset.to_radians()
+                    + self.rot.y.to_radians())
+                    % (std::f32::consts::PI * 2.0);
+        
+        
+                let sprite_amt = primitive.sprite_ref.get().sprite_amount();
+        
+                (angle / (std::f32::consts::PI * 2.0) * sprite_amt as f32).floor() as u32
+            }
+        };
 
-        let sprite_index = (angle / (std::f32::consts::PI * 2.0) * sprite_amt as f32).floor();
-
-        primitive.bind_index(ctx, sprite_sheet_uniforms, sprite_index as u32);
+        primitive.bind_index(ctx, sprite_sheet_uniforms, sprite_index);
 
         // self.mesh.bind(ctx, sprite_sheet_uniforms);
 
@@ -79,6 +103,12 @@ impl Billboard {
                 &self.model_mat(ctx.cam).to_cols_array(),
             )
         };
+    }
+}
+
+impl Object for Billboard {
+    fn render(&self, ctx: &RenderContext) {
+        self.render(ctx);
     }
 }
 

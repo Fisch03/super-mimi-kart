@@ -106,6 +106,7 @@ impl MapToScene for Map {
             item_boxes,
             coins,
             items: Vec::new(),
+            explosions: Vec::new(),
 
             map,
 

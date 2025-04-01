@@ -1,7 +1,7 @@
 use crate::engine::{
     Camera, CreateContext, RenderContext, UpdateContext,
     object::{Object, Transform},
-    sprite::{Billboard, SpriteSheet},
+    sprite::{Billboard, BillboardMode, SpriteSheet},
 };
 use crate::game::objects::{Coin, ItemBox};
 use common::{
@@ -27,7 +27,9 @@ fn load_player(ctx: &CreateContext, transform: Transform) -> Billboard {
     billboard.pos = transform.pos;
 
     billboard.rot = transform.rot;
-    billboard.rotation_offset = ROTATION_OFFSET;
+    billboard.mode = BillboardMode::Rotate {
+        offset: ROTATION_OFFSET,
+    };
 
     billboard.scale_uniform(0.5);
 
@@ -48,7 +50,7 @@ pub struct Player {
     velocity: Vec2,
 
     offroad_since: Option<f64>,
-    drift_state: DriftState,
+    pub drift_state: DriftState,
     jump_progress: f32,
 
     hit_time: f32,
@@ -61,14 +63,14 @@ pub struct Player {
     pub item: Option<ItemKind>,
     pub coins: u32,
 
-    camera_angle: f32,
+    pub camera_angle: f32,
 
     collider: Ball,
     collision_timeout: f32,
 }
 
 #[derive(Debug, PartialEq)]
-enum DriftState {
+pub enum DriftState {
     None,
     Offroad,
     Queued(f32), // time in s before queue is cancelled
@@ -96,6 +98,12 @@ impl DriftState {
             DriftState::Right => 1.0,
             DriftState::None | DriftState::Queued(_) | DriftState::Offroad => 0.0,
         }
+    }
+}
+
+impl Default for DriftState {
+    fn default() -> Self {
+        DriftState::None
     }
 }
 
