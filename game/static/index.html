@@ -1,42 +1,67 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Super Mimi Kart!</title>
+<!--
+    cock
 
-    <style>
-      body {
-        margin: 0;
-        padding: 0;
-        overflow: hidden;
-        background-color: #000000;
-      }
+    theres no code to read here so
+    
+    ________ ___  ___  ________  ___  __       
+    |\  _____\\  \|\  \|\   ____\|\  \|\  \     
+    \ \  \__/\ \  \\\  \ \  \___|\ \  \/  /|_   
+    \ \   __\\ \  \\\  \ \  \    \ \   ___  \  
+      \ \  \_| \ \  \\\  \ \  \____\ \  \\ \  \ 
+      \ \__\   \ \_______\ \_______\ \__\\ \__\
+        \|__|    \|_______|\|_______|\|__| \|__|                                        
+        ___    ___ ________  ___  ___             
+      |\  \  /  /|\   __  \|\  \|\  \            
+      \ \  \/  / | \  \|\  \ \  \\\  \           
+        \ \    / / \ \  \\\  \ \  \\\  \          
+        \/  /  /   \ \  \\\  \ \  \\\  \         
+      __/  / /      \ \_______\ \_______\        
+      |\___/ /        \|_______|\|_______|        
+      \|___|/                                     
 
-      #CanvasWrapper {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100vh;
-        width: 100vw;
-      }
+  (but also its available at https://github.com/Fisch03/super-mimi-kart if i rember to make it public)
+  -->
 
-      #GameCanvas {
-        width: 100%;
-        height: 100%;
-        image-rendering: pixelated;
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Super Mimi Kart!</title>
 
-        cursor: none;
-      }
-    </style>
-  </head>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: #000000;
+    }
 
-  <body>
-    <div id="CanvasWrapper"><canvas id="GameCanvas"></canvas></div>
+    #CanvasWrapper {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      width: 100vw;
+    }
 
-    <script type="module">
-      import init from "./game.js?v=1";
-      await init();
-    </script>
-  </body>
+    #GameCanvas {
+      width: 100%;
+      height: 100%;
+      image-rendering: pixelated;
+
+      cursor: none;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="CanvasWrapper"><canvas id="GameCanvas"></canvas></div>
+
+  <script type="module">
+    import init from "./game.js?v=2";
+    await init();
+  </script>
+</body>
+
 </html>
