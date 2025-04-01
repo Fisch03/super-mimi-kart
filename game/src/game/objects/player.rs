@@ -15,7 +15,7 @@ use parry2d::math::{Isometry, Vector};
 use parry2d::shape::Ball;
 use parry2d::utils::point_in_poly2d;
 
-const ROTATION_OFFSET: f32 = 184.0;
+const ROTATION_OFFSET: f32 = 186.0;
 const COLLIDER_RADIUS: f32 = 5.0;
 
 fn load_player(ctx: &CreateContext, transform: Transform) -> Billboard {
@@ -55,9 +55,11 @@ pub struct Player {
     hit_rotation: f32,
     hit_rotation_target: f32,
 
-    coins: u32,
+    boost_time: f32,
+
     use_item: bool,
-    item: Option<ItemKind>,
+    pub item: Option<ItemKind>,
+    pub coins: u32,
 
     camera_angle: f32,
 
@@ -119,9 +121,11 @@ impl Player {
             input: Vec2::new(0.0, 0.0),
             velocity: Vec2::new(0.0, 0.0),
 
+            boost_time: 0.0,
+
             coins: 0,
             use_item: false,
-            item: Some(ItemKind::Banana),
+            item: None,
 
             offroad_since: None,
             drift_state: DriftState::None,
@@ -141,8 +145,8 @@ impl Player {
         &mut self,
         ctx: &mut UpdateContext,
         players: &HashMap<ClientId, ExternalPlayer>,
-        coins: &[Coin],
-        item_boxes: &[ItemBox],
+        coins: &mut [Coin],
+        item_boxes: &mut [ItemBox],
         cam: &mut Camera,
     ) {
         if players.len() > 0 {
@@ -173,17 +177,19 @@ impl Player {
             }
         }
 
-        for (index, coin) in coins.iter().enumerate().filter(|(_, coin)| coin.state) {
+        for (index, coin) in coins.iter_mut().enumerate().filter(|(_, coin)| coin.state) {
             if coin.pos().distance(self.physical_pos) < 0.6 {
                 ctx.send_msg(ClientMessage::PickUp {
                     kind: PickupKind::Coin,
                     index,
                 });
+                coin.state = false;
+                self.coins = (self.coins + 1).min(10);
             }
         }
 
         for (index, item_box) in item_boxes
-            .iter()
+            .iter_mut()
             .enumerate()
             .filter(|(_, item_box)| item_box.state)
         {
@@ -204,6 +210,7 @@ impl Player {
                     kind: PickupKind::ItemBox,
                     index,
                 });
+                item_box.state = false;
             }
         }
 
@@ -259,7 +266,7 @@ impl Player {
         );
 
         let amt = own_forward.dot(other_forward);
-        let other_new = self.velocity.y * amt;
+        // let other_new = self.velocity.y * amt;
         self.velocity.y = other_velocity * amt;
 
         // // add some extra bounce
@@ -271,8 +278,13 @@ impl Player {
     }
 
     pub fn hit(&mut self) {
+        if self.hit_time > 0.0 {
+            return;
+        }
+
         self.hit_time = 1.5;
         self.hit_rotation_target = self.hit_rotation + 360.0 * 2.0;
+        self.coins -= self.coins / 2;
     }
 
     pub fn key_down(&mut self, key: &str) {
@@ -349,11 +361,25 @@ impl Player {
 impl Object for Player {
     fn update(&mut self, ctx: &mut UpdateContext) {
         const MOVE_ACCEL: f32 = 15.0;
+        const COIN_BOOST: f32 = 2.0;
+
         const STEER_ACCEL: f32 = 50.0;
 
         const DRIFT_ACCEL: f32 = 65.0;
 
-        let mut move_accel = self.input.y * MOVE_ACCEL;
+        let coin_boost = match self.coins {
+            10 => COIN_BOOST * 1.5,
+            c => (c as f32 / 10.0) * COIN_BOOST,
+        };
+
+        let boost = if self.boost_time > 0.0 {
+            self.boost_time -= ctx.dt;
+            15.0
+        } else {
+            0.0
+        };
+
+        let mut move_accel = self.input.y * (MOVE_ACCEL + coin_boost) + boost;
         let mut steer_accel = self.input.x * STEER_ACCEL;
 
         // offroad
@@ -365,7 +391,9 @@ impl Object for Player {
             .any(|offroad| point_in_poly2d(&pos_map, &offroad.0));
 
         if offroad {
-            move_accel *= 0.5;
+            if self.boost_time <= 0.0 {
+                move_accel *= 0.5;
+            }
 
             self.offroad_since = Some(self.offroad_since.unwrap_or(ctx.time()));
             if ctx.time() - self.offroad_since.unwrap() > 100.0 {
@@ -467,11 +495,10 @@ impl Object for Player {
 
         if self.use_item {
             if let Some(item) = self.item.take() {
-                log::info!("player {:?}", new_pos);
-                log::info!("use item: {:?}", item);
                 let active_item = match item {
                     ItemKind::Boost => {
-                        self.velocity.y += 20.0;
+                        self.boost_time = 0.8;
+                        self.velocity.y += 8.0;
                         None
                     }
 
@@ -483,8 +510,6 @@ impl Object for Player {
                 if let Some(active_item) = active_item {
                     ctx.send_msg(ClientMessage::UseItem(active_item));
                 }
-
-                self.item = Some(item);
             }
             self.use_item = false;
         }
@@ -517,6 +542,7 @@ impl AsRef<Transform> for Player {
 #[derive(Debug)]
 pub struct ExternalPlayer {
     billboard: Billboard,
+    target_pos: Vec2,
     name: String,
     velocity: f32,
     physical_rot: f32,
@@ -535,6 +561,7 @@ impl ExternalPlayer {
         Self {
             billboard,
             name,
+            target_pos: start,
 
             velocity: 0.0,
             physical_rot: 0.0,
@@ -544,7 +571,8 @@ impl ExternalPlayer {
     }
 
     pub fn update_state(&mut self, state: PlayerState) {
-        self.pos = Vec3::new(state.pos.x, state.jump_height - 0.18, state.pos.y);
+        self.target_pos = state.pos;
+        self.pos.y = state.jump_height - 0.18;
         self.rot = Rotation::new(0.0, state.visual_rot, 0.0);
 
         self.velocity = state.vel;
@@ -555,7 +583,10 @@ impl ExternalPlayer {
 }
 
 impl Object for ExternalPlayer {
-    fn update(&mut self, _ctx: &mut UpdateContext) {}
+    fn update(&mut self, ctx: &mut UpdateContext) {
+        self.pos.x = f32::lerp(self.pos.x, self.target_pos.x, ctx.dt * 20.0);
+        self.pos.z = f32::lerp(self.pos.z, self.target_pos.y, ctx.dt * 20.0);
+    }
 
     fn render(&self, ctx: &RenderContext) {
         self.billboard.render(ctx);

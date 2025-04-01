@@ -20,6 +20,11 @@ use client_handler::{ClientManager, ClientManagerHandle, SendTo, TickResult};
 
 mod game_state;
 
+const MAPS: [&str; 2] = [
+    "maps/mario_circuit_1/mario_circuit_1.smk",
+    "maps/donut_plains_1/donut_plains_1.smk",
+];
+
 #[derive(Debug)]
 pub struct GameServerHandle {
     next_client_id: AtomicU32,
@@ -72,14 +77,14 @@ impl GameServer {
             self.clients.await_client().await;
 
             #[cfg(not(debug_assertions))]
-            let wait_time = 20;
+            let wait_time = 15;
             #[cfg(debug_assertions)]
             let wait_time = 5;
 
             log::info!("waiting {} seconds for players to join", wait_time);
             tokio::time::sleep(Duration::from_secs(wait_time)).await;
 
-            let map_path = "maps/mcircuit/mcircuit.smk";
+            let map_path = MAPS.choose(&mut rand::thread_rng()).unwrap();
             log::info!("waiting for players to load map '{:?}'", map_path);
 
             let load_map = tokio::task::spawn_blocking(move || {

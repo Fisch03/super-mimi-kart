@@ -185,8 +185,6 @@ impl ActiveItem {
                                 .advance_position(SHELL_SPEED * 4.0 * MAP_SCALE, &mut future_pos);
 
                             if target.state.track_pos < future_pos {
-                                *on_track = false;
-
                                 let direction = (target.state.pos - self.pos).normalize();
                                 self.pos += direction * SHELL_SPEED;
                             } else {

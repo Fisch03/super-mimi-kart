@@ -426,8 +426,8 @@ impl Game {
                 scene.player.late_update(
                     &mut ctx,
                     &scene.players,
-                    &scene.coins,
-                    &scene.item_boxes,
+                    &mut scene.coins,
+                    &mut scene.item_boxes,
                     &mut self.cam,
                 );
 
@@ -511,6 +511,8 @@ impl Game {
             viewport: self.viewport,
             assets: &self.cache,
 
+            dt,
+
             shaders: &self.shaders,
 
             cam: &self.cam,
@@ -557,6 +559,12 @@ impl Game {
                     }
                     RaceState::Running { .. } => {
                         self.shared_assets.item_frame.render(&ctx);
+                        if let Some(item) = scene.player.item {
+                            self.shared_assets.render_item(&ctx, item);
+                        }
+
+                        self.shared_assets
+                            .render_coin_count(&ctx, scene.player.coins as u32);
                         self.shared_assets
                             .render_pos(&ctx, scene.player.place as u32);
                     }
@@ -573,7 +581,7 @@ impl Game {
                             self.shared_assets.render_pos_centered(&ctx, place as u32);
                         }
 
-                        log::warn!("TODO: render race results")
+                        // log::warn!("TODO: render race results")
                     }
                 }
                 unsafe { self.gl.enable(glow::DEPTH_TEST) };

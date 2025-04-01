@@ -105,8 +105,21 @@ impl Anchor {
 }
 
 #[derive(Debug)]
+pub struct UiMesh {
+    pub transform: Transform,
+    pub mesh: MeshRef,
+}
+
+impl UiMesh {
+    pub fn render(&self, ctx: &RenderContext) {
+        self.mesh.get().render_ui(ctx, &self.transform);
+    }
+}
+
+#[derive(Debug)]
 pub struct UiSprite {
     pub pos: UiVec,
+    pub layer: i32,
     pub width: UiDim,
     pub local_anchor: Anchor,
     pub global_anchor: Anchor,
@@ -148,6 +161,7 @@ impl UiSprite {
             pos,
             aspect,
             width: UiDim::Pixels(dim.x as i32),
+            layer: 0,
 
             local_anchor: Anchor::CENTER,
             global_anchor: Anchor::TOP_LEFT,
@@ -205,7 +219,11 @@ impl UiSprite {
             + local_offset;
 
         let transform = Transform::new()
-            .position(position.x.round() + 0.1, position.y.round() + 0.1, 0.0)
+            .position(
+                position.x.round() + 0.1,
+                position.y.round() + 0.1,
+                self.layer as f32,
+            )
             .rotation(-90.0, 0.0, 0.0)
             .scale(width, 1.0, width * self.aspect);
 

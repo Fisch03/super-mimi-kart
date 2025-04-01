@@ -106,13 +106,17 @@ impl Camera {
 
 impl UiCamera {
     pub fn new(viewport: Vec2) -> Self {
-        Self {
-            proj: Mat4::orthographic_rh(0.0, viewport.x, viewport.y, 0.0, -1.0, 1.0),
-        }
+        let mut cam = Self {
+            proj: Mat4::default(),
+        };
+
+        cam.resize(viewport);
+
+        cam
     }
 
     pub fn resize(&mut self, viewport: Vec2) {
-        self.proj = Mat4::orthographic_rh(0.0, viewport.x, viewport.y, 0.0, -1.0, 1.0);
+        self.proj = Mat4::orthographic_rh(0.0, viewport.x, viewport.y, 0.0, -100.0, 100.0);
     }
 
     pub fn bind(&self, gl: &Context, uniforms: &CameraUniforms) {

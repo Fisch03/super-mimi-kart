@@ -46,6 +46,7 @@ impl AsRef<AssetCache> for CreateContext<'_> {
 }
 
 pub struct RenderContext<'a> {
+    pub dt: f32,
     pub gl: &'a glow::Context,
     pub cam: &'a Camera,
     pub ui_cam: &'a UiCamera,

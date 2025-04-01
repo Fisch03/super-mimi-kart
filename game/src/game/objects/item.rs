@@ -1,5 +1,5 @@
 use crate::engine::{
-    CreateContext, RenderContext, UpdateContext,
+    CreateContext, RenderContext,
     cache::MeshRef,
     mesh::Mesh,
     object::{Object, Transform},
@@ -24,6 +24,9 @@ impl Item {
         ctx.assets
             .load_mesh("chorb", || Mesh::load(&ctx, "chorb.glb"));
         ctx.assets
+            .load_mesh("chorb_red", || Mesh::load(&ctx, "chorb_red.glb"));
+
+        ctx.assets
             .load_sheet("banana", || SpriteSheet::load_single(&ctx, "yuri.png"));
     }
 
@@ -40,17 +43,27 @@ impl Item {
 
         let state = match item.kind {
             ActiveItemKind::RedShell { .. } => ItemState::RedShell {
-                mesh: ctx.assets.get_mesh("chorb").unwrap(),
+                mesh: ctx.assets.load_mesh("chorb_red", || {
+                    log::warn!("had to reload mesh that shouldve been cached");
+                    Mesh::load(&ctx, "chorb_red.glb")
+                }),
                 transform,
             },
 
             ActiveItemKind::GreenShell { .. } => ItemState::GreenShell {
-                mesh: ctx.assets.get_mesh("chorb").unwrap(),
+                mesh: ctx.assets.load_mesh("chorb", || {
+                    log::warn!("had to reload mesh that shouldve been cached");
+                    Mesh::load(&ctx, "chorb.glb")
+                }),
                 transform,
             },
 
             ActiveItemKind::Banana => {
-                let sheet = ctx.assets.get_sheet("banana").unwrap();
+                let sheet = ctx.assets.load_sheet("banana", || {
+                    log::warn!("had to reload sheet that shouldve been cached");
+                    SpriteSheet::load_single(&ctx, "yuri.png")
+                });
+
                 let mut billboard = Billboard::new(&ctx, "banana", sheet);
                 billboard.transform = transform;
                 billboard.transform.scale_uniform(0.3);

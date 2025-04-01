@@ -346,8 +346,9 @@ impl ClientManager {
             race_time,
             players: self
                 .clients
-                .iter()
-                .map(|(&id, client)| (id, client.state.clone()))
+                .values()
+                .chain(self.finished_clients.iter().map(|(c, _)| c))
+                .map(|client| (client.id(), client.state.clone()))
                 .collect(),
             active_items: self.game_state.active_items(),
         };
@@ -414,6 +415,10 @@ impl ClientManager {
 
             ClientMessage::PlayerUpdate(state) => {
                 if let Some(client) = self.clients.get_mut(&id) {
+                    client.state = state;
+                } else if let Some((client, _)) =
+                    self.finished_clients.iter_mut().find(|(c, _)| c.id() == id)
+                {
                     client.state = state;
                 }
             }
