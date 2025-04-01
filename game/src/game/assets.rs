@@ -99,7 +99,7 @@ impl SharedAssets {
         let mut credits = UiSprite::load_single(&ctx, "credits.png", UiVec::new(Px(0), Pct(20.0)))
             .anchor(Anchor::CENTER);
         credits.width = Ratio(0.5).into();
-        let mut controls = UiSprite::load_single(&ctx, "controls.png", UiVec::new(Px(1), Px(-1)))
+        let controls = UiSprite::load_single(&ctx, "controls.png", UiVec::new(Px(2), Px(-2)))
             .anchor(Anchor::BOTTOM_LEFT);
 
         let mut join_waiting =

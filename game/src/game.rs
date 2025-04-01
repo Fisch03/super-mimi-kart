@@ -116,7 +116,7 @@ impl Game {
             gl.enable(glow::BLEND);
             gl.enable(glow::CULL_FACE);
             gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
-            gl.clear_color(0.3, 0.3, 0.3, 1.0);
+            gl.clear_color(0.4, 0.0, 0.0, 1.0);
         }
 
         // let ctx = CreateContext {
@@ -462,16 +462,18 @@ impl Game {
                     &mut self.cam,
                 );
 
-                let explosion_frames = self.shared_assets.explosion.get().sprite_amount();
-                scene.explosions.retain(|explosion| {
-                    if let BillboardMode::Static { index } = explosion.mode {
-                        index < explosion_frames - 1
-                    } else {
-                        false
+                if ctx.tick {
+                    let explosion_frames = self.shared_assets.explosion.get().sprite_amount();
+                    scene.explosions.retain(|explosion| {
+                        if let BillboardMode::Static { index } = explosion.mode {
+                            index < explosion_frames - 1
+                        } else {
+                            false
+                        }
+                    });
+                    for explosion in scene.explosions.iter_mut() {
+                        explosion.next_frame();
                     }
-                });
-                for explosion in scene.explosions.iter_mut() {
-                    explosion.next_frame();
                 }
 
                 match race_state {

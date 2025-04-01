@@ -25,8 +25,9 @@ use client_handler::{ClientManager, ClientManagerHandle, SendTo, TickResult};
 
 mod game_state;
 
-const MAPS: [&str; 2] = [
+const MAPS: [&str; 3] = [
     "maps/mario_circuit_1/mario_circuit_1.smk",
+    "maps/mario_circuit_3/mario_circuit_3.smk",
     "maps/donut_plains_1/donut_plains_1.smk",
 ];
 
@@ -183,13 +184,13 @@ impl GameServerHandle {
         name: String,
     ) -> Option<mpsc::Receiver<SerializedServerMessage>> {
         {
-            let mut connected_ips = self.connected_ips.lock().unwrap();
-            #[cfg(not(debug_assertions))]
-            if connected_ips.contains(&addr) {
-                log::warn!("client with ip {} already connected", addr);
-                return None;
-            }
-            connected_ips.insert(addr);
+            // let mut connected_ips = self.connected_ips.lock().unwrap();
+            // #[cfg(not(debug_assertions))]
+            // if connected_ips.contains(&addr) {
+            //     log::warn!("client with ip {} already connected", addr);
+            //     return None;
+            // }
+            // connected_ips.insert(addr);
         }
 
         let (msg_tx, msg_rx) = mpsc::channel(8);

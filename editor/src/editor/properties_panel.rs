@@ -1,6 +1,6 @@
 use super::Editor;
 use common::map::AssetId;
-use egui::{vec2, Grid, Image, SliderClamping, TextureFilter, TextureOptions, TopBottomPanel};
+use egui::{Grid, Image, SliderClamping, TextureFilter, TextureOptions, TopBottomPanel, vec2};
 use egui_phosphor::bold;
 
 impl Editor {
@@ -36,10 +36,9 @@ impl Editor {
 
             ui.label("Start Offset V");
             ui.add(
-                egui::Slider::new(&mut self.map.track.start_offset_v, 0.0..=50.0)
+                egui::Slider::new(&mut self.map.track.start_offset_v, -50.0..=50.0)
                     .clamping(SliderClamping::Never),
             );
-            self.map.track.start_offset_v = self.map.track.start_offset_v.max(10.0);
             ui.end_row();
         });
 
