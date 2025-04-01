@@ -9,6 +9,7 @@ pub struct Client {
     name: String,
     tx: mpsc::Sender<SerializedServerMessage>,
     pub state: PlayerState,
+    pub load_failures: u8,
 }
 
 impl Client {
@@ -18,6 +19,7 @@ impl Client {
             name,
             tx,
             state: PlayerState::default(),
+            load_failures: 0,
         }
     }
 

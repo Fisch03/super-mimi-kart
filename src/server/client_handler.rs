@@ -230,11 +230,13 @@ impl ClientManager {
                 ClientManagerCommand::CompleteRound => self.complete_round().await,
 
                 ClientManagerCommand::LoadTimeout => {
-                    for client in &self.loading_clients {
+                    for client in &mut self.loading_clients {
                         client
                             .send(SerializedServerMessage::new(ServerMessage::LoadedTooSlow))
                             .await;
+                        client.load_failures += 1;
                     }
+                    self.loading_clients.retain(|c| c.load_failures < 3);
                     self.waiting_clients.extend(self.loading_clients.drain(..));
                     if let Some(task) = self.loading_task.take() {
                         task.join_handle.abort();

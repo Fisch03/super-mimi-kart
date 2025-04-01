@@ -11,7 +11,7 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use tokio::{sync::mpsc, time::interval};
+use tokio::{sync::mpsc, time::{interval, sleep}};
 
 use crate::client::Client;
 
@@ -77,7 +77,7 @@ impl GameServer {
             self.clients.await_client().await;
 
             #[cfg(not(debug_assertions))]
-            let wait_time = 15;
+            let wait_time = 10;
             #[cfg(debug_assertions)]
             let wait_time = 5;
 
@@ -132,6 +132,8 @@ impl GameServer {
                 .send(SendTo::InGameAll, ServerMessage::StartRace)
                 .await;
             let race_start = Instant::now();
+            let race_timeout = sleep(Duration::from_secs(60*3));
+            tokio::pin!(race_timeout);
 
             let mut tick_interval =
                 interval(Duration::from_secs_f64(1.0 / TICKS_PER_SECOND as f64));
@@ -145,6 +147,7 @@ impl GameServer {
                             TickResult::NoChange => {}
                         }
                     }
+                    _ = &mut race_timeout => break,
                 }
             }
 
