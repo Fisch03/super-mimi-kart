@@ -4,8 +4,10 @@ use std::{rc::Rc, sync::mpsc};
 use web_sys::WebSocket;
 
 use crate::engine::{
-    Camera, CreateContext, RenderContext, Shaders, UiCamera, UpdateContext, cache::AssetCache,
-    object::Object, sprite::{Billboard, BillboardMode}
+    Camera, CreateContext, RenderContext, Shaders, UiCamera, UpdateContext,
+    cache::AssetCache,
+    object::Object,
+    sprite::{Billboard, BillboardMode},
 };
 use common::{ClientId, ClientMessage, PickupKind, Placement, ServerMessage, map::Map, types::*};
 
@@ -230,6 +232,12 @@ impl Game {
         // handle messages
         while let Ok(msg) = self.ws_rx.try_recv() {
             match (msg, &mut self.state) {
+                (ServerMessage::DuplicateLogin, _) => {
+                    crate::alert(
+                        "youve already joined the game under this ip address. make sure you dont have another browser tab open with the game running.\nplease refresh the page to try again.",
+                    );
+                }
+
                 (ServerMessage::PrepareRound { map }, _) => {
                     log::info!("preparing round with map: {:?}", map);
                     let map_download = MapDownload::start(map);
@@ -367,10 +375,9 @@ impl Game {
                         viewport: self.viewport,
                     };
 
-                    let player: Option<&dyn Object> = 
-                    if player == scene.own_id {
+                    let player: Option<&dyn Object> = if player == scene.own_id {
                         scene.player.hit();
-                        
+
                         Some(&scene.player)
                     } else if let Some(player) = scene.players.get(&player) {
                         Some(player)
@@ -381,12 +388,10 @@ impl Game {
                     if let Some(player) = player {
                         let to_camera = player.as_ref().pos - self.cam.transform.pos;
 
-                        let mut billboard = Billboard::new(
-                            &ctx,
-                            "explosion",
-                            self.shared_assets.explosion.clone(),
-                        );
-                        billboard.transform.pos = player.as_ref().pos + to_camera.normalize() * -0.05;
+                        let mut billboard =
+                            Billboard::new(&ctx, "explosion", self.shared_assets.explosion.clone());
+                        billboard.transform.pos =
+                            player.as_ref().pos + to_camera.normalize() * -0.05;
                         scene.explosions.push(billboard);
                     }
                 }
@@ -458,13 +463,13 @@ impl Game {
                 );
 
                 let explosion_frames = self.shared_assets.explosion.get().sprite_amount();
-                scene
-                    .explosions
-                    .retain(|explosion| if let BillboardMode::Static { index } = explosion.mode {
+                scene.explosions.retain(|explosion| {
+                    if let BillboardMode::Static { index } = explosion.mode {
                         index < explosion_frames - 1
                     } else {
                         false
-                    });
+                    }
+                });
                 for explosion in scene.explosions.iter_mut() {
                     explosion.next_frame();
                 }
@@ -656,6 +661,7 @@ impl Game {
                     self.shared_assets.credits.render(&ctx);
                 } else {
                     self.shared_assets.render_menu(&ctx);
+                    self.shared_assets.controls.render(&ctx);
                 }
             }
         }

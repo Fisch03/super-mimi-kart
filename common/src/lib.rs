@@ -20,6 +20,8 @@ pub fn world_coord_to_map(pos: Vec2) -> Vec2 {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ServerMessage {
+    DuplicateLogin,
+
     // server is preparing a new round
     PrepareRound {
         map: String,

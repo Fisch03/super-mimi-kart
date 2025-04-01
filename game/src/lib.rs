@@ -10,7 +10,7 @@ mod engine;
 
 #[wasm_bindgen]
 extern "C" {
-    fn alert(s: &str);
+    pub fn alert(s: &str);
 }
 
 #[wasm_bindgen(start)]

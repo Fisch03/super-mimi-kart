@@ -4,14 +4,19 @@ use common::{
 };
 use rand::seq::SliceRandom;
 use std::{
+    collections::HashSet,
     fs::File,
+    net::IpAddr,
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicU32, Ordering},
     },
     time::{Duration, Instant},
 };
-use tokio::{sync::mpsc, time::{interval, sleep}};
+use tokio::{
+    sync::mpsc,
+    time::{interval, sleep},
+};
 
 use crate::client::Client;
 
@@ -29,6 +34,7 @@ const MAPS: [&str; 2] = [
 pub struct GameServerHandle {
     next_client_id: AtomicU32,
     clients: ClientManagerHandle,
+    connected_ips: Arc<Mutex<HashSet<IpAddr>>>,
 }
 
 #[derive(Debug)]
@@ -59,6 +65,7 @@ impl From<ServerMessage> for SerializedServerMessage {
 impl GameServer {
     pub fn new() -> GameServerHandle {
         let clients = ClientManager::new();
+        let connected_ips = Arc::new(Mutex::new(HashSet::new()));
 
         let server = Self {
             clients: clients.clone(),
@@ -69,6 +76,7 @@ impl GameServer {
         GameServerHandle {
             next_client_id: AtomicU32::new(1),
             clients,
+            connected_ips,
         }
     }
 
@@ -132,7 +140,7 @@ impl GameServer {
                 .send(SendTo::InGameAll, ServerMessage::StartRace)
                 .await;
             let race_start = Instant::now();
-            let race_timeout = sleep(Duration::from_secs(60*3));
+            let race_timeout = sleep(Duration::from_secs(60 * 3));
             tokio::pin!(race_timeout);
 
             let mut tick_interval =
@@ -171,19 +179,32 @@ impl GameServerHandle {
     pub async fn register_client(
         self: &Arc<Self>,
         client_id: ClientId,
+        addr: IpAddr,
         name: String,
-    ) -> mpsc::Receiver<SerializedServerMessage> {
+    ) -> Option<mpsc::Receiver<SerializedServerMessage>> {
+        {
+            let mut connected_ips = self.connected_ips.lock().unwrap();
+            #[cfg(not(debug_assertions))]
+            if connected_ips.contains(&addr) {
+                log::warn!("client with ip {} already connected", addr);
+                return None;
+            }
+            connected_ips.insert(addr);
+        }
+
         let (msg_tx, msg_rx) = mpsc::channel(8);
 
         self.clients
             .add_client(Client::new(client_id, name, msg_tx))
             .await;
 
-        msg_rx
+        Some(msg_rx)
     }
 
-    pub async fn remove_client(&self, client_id: ClientId) {
+    pub async fn remove_client(&self, client_id: ClientId, addr: IpAddr) {
         self.clients.remove_client(client_id).await;
+        let mut connected_ips = self.connected_ips.lock().unwrap();
+        connected_ips.remove(&addr);
     }
 
     pub async fn handle_client_message(self: &Arc<Self>, client_id: ClientId, msg: ClientMessage) {

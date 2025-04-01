@@ -1,5 +1,10 @@
 use crate::engine::{
-    CreateContext, RenderContext, mesh::Mesh, object::Transform, sprite::{Skybox, SpriteSheet}, ui::*, cache::SheetRef,
+    CreateContext, RenderContext,
+    cache::SheetRef,
+    mesh::Mesh,
+    object::Transform,
+    sprite::{Skybox, SpriteSheet},
+    ui::*,
 };
 use common::{ItemKind, types::*};
 
@@ -11,6 +16,7 @@ pub struct SharedAssets {
     pub start_button: UiSprite,
     pub credits_button: UiSprite,
     pub credits: UiSprite,
+    pub controls: UiSprite,
 
     pub item_frame: UiSprite,
     pub banana_icon: UiSprite,
@@ -93,6 +99,8 @@ impl SharedAssets {
         let mut credits = UiSprite::load_single(&ctx, "credits.png", UiVec::new(Px(0), Pct(20.0)))
             .anchor(Anchor::CENTER);
         credits.width = Ratio(0.5).into();
+        let mut controls = UiSprite::load_single(&ctx, "controls.png", UiVec::new(Px(1), Px(-1)))
+            .anchor(Anchor::BOTTOM_LEFT);
 
         let mut join_waiting =
             UiSprite::load_single(&ctx, "join_wait.png", UiVec::new(Px(0), Pct(20.0)))
@@ -112,9 +120,9 @@ impl SharedAssets {
         cursor.width = Ratio(0.5).into();
         cursor.layer = 99;
 
-        let explosion = ctx.assets.load_sheet("explosion", || {
-            SpriteSheet::load_multi(&ctx, "explosion")
-        });
+        let explosion = ctx
+            .assets
+            .load_sheet("explosion", || SpriteSheet::load_multi(&ctx, "explosion"));
 
         Self {
             skybox: Skybox::load(&ctx, "skybox"),
@@ -130,6 +138,7 @@ impl SharedAssets {
             start_button,
             credits_button,
             credits,
+            controls,
 
             item_frame,
 

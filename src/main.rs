@@ -1,17 +1,20 @@
 use axum::{
     Router,
     extract::{
-        State,
+        ConnectInfo, State,
         ws::{Message, WebSocket, WebSocketUpgrade},
     },
     response::IntoResponse,
     routing::get,
 };
 use futures::{SinkExt, StreamExt};
-use std::{net::SocketAddr, sync::Arc};
+use std::{
+    net::{IpAddr, SocketAddr},
+    sync::Arc,
+};
 use tower_http::{compression::CompressionLayer, services::ServeDir};
 
-use common::ClientMessage;
+use common::{ClientMessage, ServerMessage};
 
 mod server;
 use server::{GameServer, GameServerHandle};
@@ -62,12 +65,13 @@ async fn main() {
 
 async fn ws_handler(
     ws: WebSocketUpgrade,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(server): State<Arc<GameServerHandle>>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_client(socket, server))
+    ws.on_upgrade(move |socket| handle_client(socket, server, addr.ip()))
 }
 
-async fn handle_client(socket: WebSocket, server: Arc<GameServerHandle>) {
+async fn handle_client(socket: WebSocket, server: Arc<GameServerHandle>, addr: IpAddr) {
     let client_id = server.allocate_client();
     log::info!("({}) client connecting", client_id);
 
@@ -90,12 +94,23 @@ async fn handle_client(socket: WebSocket, server: Arc<GameServerHandle>) {
         return;
     };
     log::info!(
-        "({}) client connected with name '{}'",
+        "({}, {}) client connected with name '{}'",
         client_id,
+        addr,
         client_name
     );
 
-    let mut msg_rx = server.register_client(client_id, client_name).await;
+    let mut msg_rx = match server.register_client(client_id, addr, client_name).await {
+        Some(msg_rx) => msg_rx,
+        None => {
+            let _ = socket_tx
+                .send(Message::Binary(
+                    ServerMessage::DuplicateLogin.to_bytes().unwrap(),
+                ))
+                .await;
+            return;
+        }
+    };
 
     let rx_task = {
         let server = server.clone();
@@ -133,6 +148,6 @@ async fn handle_client(socket: WebSocket, server: Arc<GameServerHandle>) {
         _ = tx_task => ()
     }
 
-    server.remove_client(client_id).await;
+    server.remove_client(client_id, addr).await;
     log::info!("({}) client disconnected", client_id);
 }

@@ -234,6 +234,7 @@ impl ClientManager {
                         client
                             .send(SerializedServerMessage::new(ServerMessage::LoadedTooSlow))
                             .await;
+                        log::warn!("client {} took too long to load", client.id());
                         client.load_failures += 1;
                     }
                     self.loading_clients.retain(|c| c.load_failures < 3);
