@@ -47,6 +47,7 @@ pub struct Player {
     pub place: usize,
 
     pub input: Vec2,
+    space_pressed: bool,
     velocity: Vec2,
 
     offroad_since: Option<f64>,
@@ -127,6 +128,7 @@ impl Player {
             place: place + 1,
 
             input: Vec2::new(0.0, 0.0),
+            space_pressed: false,
             velocity: Vec2::new(0.0, 0.0),
 
             boost_time: 0.0,
@@ -240,7 +242,17 @@ impl Player {
         cam.transform.pos =
             Vec3::new(self.physical_pos.x, 0.0, self.physical_pos.y) - camera_forward * 2.5 + Vec3::new(0.0, 1.0, 0.0) /* + camera_shift */;
         cam.transform.rot = Rotation::new(-5.0, self.camera_angle, self.rot.z);
-        cam.set_fov(60.0 + self.velocity.y * 0.3);
+
+        cam.set_fov(f32::lerp(
+            cam.fov(),
+            60.0 + self.velocity.y * 0.3
+                - if self.offroad_since.is_some() {
+                    3.0
+                } else {
+                    0.0
+                },
+            ctx.dt * 3.0,
+        ));
     }
 
     pub fn apply_collision(
@@ -292,84 +304,120 @@ impl Player {
 
         self.hit_time = 1.5;
         self.hit_rotation_target = self.hit_rotation + 360.0 * 2.0;
-        self.coins -= self.coins / 2;
+        self.coins = self.coins.saturating_sub(self.coins / 2 - 1);
     }
 
-    pub fn key_down(&mut self, key: &str) {
+    pub fn key_down(&mut self, key: &str, swap: bool) {
+        let mut item = false;
+        let mut drift = false;
+
         match key {
-            "KeyW" => self.input.y = 1.0,
-            "KeyS" => self.input.y = -0.5,
-            "KeyA" => {
+            "KeyW" | "ArrowUp" => self.input.y = 1.0,
+            "KeyS" | "ArrowDown" => self.input.y = -0.5,
+            "KeyA" | "ArrowLeft" => {
                 self.input.x = -1.0;
                 if matches!(self.drift_state, DriftState::Queued(_)) {
-                    self.jump_progress = 0.0;
                     self.drift_state = DriftState::Left;
                 }
             }
-            "KeyD" => {
+            "KeyD" | "ArrowRight" => {
                 self.input.x = 1.0;
                 if matches!(self.drift_state, DriftState::Queued(_)) {
-                    self.jump_progress = 0.0;
                     self.drift_state = DriftState::Right;
                 }
             }
 
-            "Space" => self.use_item = true,
+            "Space" if !self.space_pressed => {
+                self.space_pressed = true;
+                if !swap {
+                    item = true;
+                } else {
+                    drift = true;
+                }
+            }
 
-            "ShiftLeft" if self.drift_state != DriftState::Offroad => {
+            "ShiftLeft" | "ShiftRight" => {
+                if !swap {
+                    drift = true;
+                } else {
+                    item = true;
+                }
+            }
+
+            _ => {}
+        }
+
+        if item {
+            self.use_item = true;
+        }
+
+        if drift {
+            log::info!("drift");
+            self.jump_progress = 0.0;
+
+            if self.drift_state != DriftState::Offroad {
                 self.drift_state = if self.input.x < 0.0 {
-                    self.jump_progress = 0.0;
                     DriftState::Left
                 } else if self.input.x > 0.0 {
-                    self.jump_progress = 0.0;
                     DriftState::Right
                 } else {
                     DriftState::Queued(0.1)
                 }
             }
-            "ShiftLeft" if self.drift_state == DriftState::Offroad => {
-                self.jump_progress = 0.0;
-            }
-
-            _ => {}
         }
     }
-    pub fn key_up(&mut self, key: &str) {
+    pub fn key_up(&mut self, key: &str, swap: bool) {
+        let mut drift = false;
+
         match key {
-            "KeyW" => {
+            "KeyW" | "ArrowUp" => {
                 if self.input.y > 0.0 {
                     self.input.y = 0.0
                 }
             }
-            "KeyS" => {
+            "KeyS" | "ArrowDown" => {
                 if self.input.y < 0.0 {
                     self.input.y = 0.0
                 }
             }
-            "KeyA" => {
+            "KeyA" | "ArrowLeft" => {
                 if self.input.x < 0.0 {
                     self.input.x = 0.0
                 }
             }
-            "KeyD" => {
+            "KeyD" | "ArrowRight" => {
                 if self.input.x > 0.0 {
                     self.input.x = 0.0
                 }
             }
 
-            "ShiftLeft" => {
-                self.drift_state = DriftState::None;
+            "ShiftLeft" | "ShiftRight" => {
+                if !swap {
+                    drift = true;
+                }
+            }
+            "Space" => {
+                self.space_pressed = false;
+
+                if swap {
+                    drift = true;
+                }
             }
 
             _ => {}
+        }
+
+        if drift {
+            self.drift_state = DriftState::None;
         }
     }
 }
 
 impl Object for Player {
     fn update(&mut self, ctx: &mut UpdateContext) {
-        const MOVE_ACCEL: f32 = 15.0;
+        const MOVE_ACCEL: f32 = 14.5;
         const COIN_BOOST: f32 = 2.0;
+        const POS_BOOST: f32 = 0.15;
 
         const STEER_ACCEL: f32 = 50.0;
 
@@ -387,7 +435,9 @@ impl Object for Player {
             0.0
         };
 
-        let mut move_accel = self.input.y * (MOVE_ACCEL + coin_boost) + boost;
+        let mut move_accel = self.input.y
+            * (MOVE_ACCEL + coin_boost + POS_BOOST * (self.place as f32).min(25.0))
+            + boost;
         let mut steer_accel = self.input.x * STEER_ACCEL;
 
         // offroad
@@ -399,13 +449,21 @@ impl Object for Player {
             .any(|offroad| point_in_poly2d(&pos_map, &offroad.0));
 
         if offroad {
-            if self.boost_time <= 0.0 {
-                move_accel *= 0.5;
+            if self.boost_time <= 0.0 && (self.jump_progress >= 1.0 || self.offroad_since.is_some())
+            {
+                if self.velocity.y > MOVE_ACCEL * 0.75 {
+                    move_accel *= 0.0;
+                } else {
+                    move_accel *= 0.5;
+                }
+
+                self.offroad_since = Some(self.offroad_since.unwrap_or(ctx.time()));
             }
 
-            self.offroad_since = Some(self.offroad_since.unwrap_or(ctx.time()));
-            if ctx.time() - self.offroad_since.unwrap() > 100.0 {
-                self.drift_state = DriftState::Offroad;
+            if let Some(offroad_since) = self.offroad_since {
+                if ctx.time() - offroad_since > 100.0 {
+                    self.drift_state = DriftState::Offroad;
+                }
             }
         } else {
             self.offroad_since = None;

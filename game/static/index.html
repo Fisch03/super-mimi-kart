@@ -35,7 +35,7 @@
       margin: 0;
       padding: 0;
       overflow: hidden;
-      background-color: #000000;
+      background-color: #660000;
     }
 
     #CanvasWrapper {
@@ -52,16 +52,30 @@
       image-rendering: pixelated;
 
       cursor: none;
+      z-index: 1;
     }
+
+    #Loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 2em;
+      color: white;
+    }
+
   </style>
 </head>
 
 <body>
+  <img id="Loading" src="load.png" />
   <div id="CanvasWrapper"><canvas id="GameCanvas"></canvas></div>
 
   <script type="module">
-    import init from "./game.js?v=3";
-    await init();
+    import init from "./game.js?v=5";
+    setTimeout(async () => {
+        await init();
+    }, 150);
   </script>
 </body>
 

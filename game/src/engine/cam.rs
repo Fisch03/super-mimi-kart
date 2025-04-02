@@ -57,6 +57,10 @@ impl Camera {
         }
     }
 
+    pub fn fov(&self) -> f32 {
+        self.fov_rad.to_degrees()
+    }
+
     pub fn resize(&mut self, viewport: Vec2) {
         self.aspect = viewport.x / viewport.y;
         self.proj = Mat4::perspective_rh(self.fov_rad, self.aspect, 0.1, 1000.0);

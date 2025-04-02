@@ -448,7 +448,7 @@ impl ClientManager {
 
                     let handle = self.make_handle();
                     task::spawn(async move {
-                        time::sleep(Duration::from_secs(2)).await;
+                        time::sleep(Duration::from_secs(1)).await;
                         handle.pickup_respawn(kind, index).await;
                     });
                 }

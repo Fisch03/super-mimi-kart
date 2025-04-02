@@ -25,10 +25,11 @@ use client_handler::{ClientManager, ClientManagerHandle, SendTo, TickResult};
 
 mod game_state;
 
-const MAPS: [&str; 3] = [
+const MAPS: [&str; 4] = [
     "maps/mario_circuit_1/mario_circuit_1.smk",
     "maps/mario_circuit_3/mario_circuit_3.smk",
     "maps/donut_plains_1/donut_plains_1.smk",
+    "maps/donut_plains_3/donut_plains_3.smk",
 ];
 
 #[derive(Debug)]

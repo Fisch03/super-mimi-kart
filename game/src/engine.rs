@@ -56,6 +56,13 @@ pub struct RenderContext<'a> {
     pub mouse_pos: Vec2,
 }
 
+impl RenderContext<'_> {
+    pub fn time(&self) -> f64 {
+        let performance = web_sys::window().unwrap().performance().unwrap();
+        performance.now()
+    }
+}
+
 impl AsRef<AssetCache> for RenderContext<'_> {
     fn as_ref(&self) -> &AssetCache {
         self.assets

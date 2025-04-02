@@ -123,6 +123,7 @@ pub struct UiSprite {
     pub width: UiDim,
     pub local_anchor: Anchor,
     pub global_anchor: Anchor,
+    pub rot: f32,
 
     mesh: MeshRef,
     pub sheet: SheetRef,
@@ -158,6 +159,7 @@ impl UiSprite {
         Self {
             mesh,
             sheet,
+            rot: 0.0,
             pos,
             aspect,
             width: UiDim::Pixels(dim.x as i32),
@@ -224,7 +226,7 @@ impl UiSprite {
                 position.y.round() + 0.1,
                 self.layer as f32,
             )
-            .rotation(-90.0, 0.0, 0.0)
+            .rotation(self.rot - 90.0, 90.0, 270.0)
             .scale(width, 1.0, width * self.aspect);
 
         self.mesh.get().render_ui(ctx, &transform);

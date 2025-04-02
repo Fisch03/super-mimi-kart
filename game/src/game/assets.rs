@@ -12,11 +12,17 @@ use common::{ItemKind, types::*};
 pub struct SharedAssets {
     pub skybox: Skybox,
 
-    pub game_logo: UiSprite,
+    game_logo: UiSprite,
+    logo_player: UiSprite,
+
     pub start_button: UiSprite,
     pub credits_button: UiSprite,
+    pub settings_button: UiSprite,
+    pub back_button: UiSprite,
+
     pub credits: UiSprite,
     pub controls: UiSprite,
+    controls_label: UiSprite,
 
     pub item_frame: UiSprite,
     pub banana_icon: UiSprite,
@@ -26,24 +32,31 @@ pub struct SharedAssets {
     pub boost_icon: UiSprite,
     pub explosion: SheetRef,
 
-    pub countdown: UiSprite,
-    pub pos_indicator: UiSprite,
-    pub pos_indicator_suffix: UiSprite,
-    pub coin_indicator: UiSprite,
-    pub coin_indicator_prefix: UiSprite,
+    countdown: UiSprite,
+    pos_indicator: UiSprite,
+    pos_indicator_suffix: UiSprite,
+    coin_indicator: UiSprite,
+    coin_indicator_prefix: UiSprite,
 
     pub join_waiting: UiSprite,
     pub load_waiting: UiSprite,
     pub download_waiting: UiSprite,
 
-    pub cursor: UiSprite,
+    cursor: UiSprite,
 }
 
 impl SharedAssets {
     pub fn load(ctx: &CreateContext) -> Self {
-        let mut game_logo = UiSprite::load_single(&ctx, "logo.png", UiVec::new(Px(0), Pct(-25.0)))
-            .anchor(Anchor::CENTER);
+        let mut game_logo =
+            UiSprite::load_single(&ctx, "logo.png", UiVec::new(Pct(-85.0), Pct(-25.0)))
+                .anchor(Anchor::CENTER);
         game_logo.width = Pct(50.0).into();
+        let logo_player = UiSprite::load_single(
+            &ctx,
+            "player/player-07.png",
+            UiVec::new(Pct(-50.0), Pct(-25.0)),
+        )
+        .anchor(Anchor::CENTER);
 
         let item_frame = UiSprite::load_single(&ctx, "item_frame.png", UiVec::new(Px(-1), Px(1)))
             .anchor(Anchor::TOP_RIGHT);
@@ -92,15 +105,23 @@ impl SharedAssets {
 
         let start_button = UiSprite::load_multi(&ctx, "start_button", UiVec::new(Px(0), Pct(10.0)))
             .anchor(Anchor::CENTER);
-        let credits_button =
-            UiSprite::load_multi(&ctx, "credits_button", UiVec::new(Px(0), Pct(20.0)))
+        let settings_button =
+            UiSprite::load_multi(&ctx, "settings_button", UiVec::new(Px(0), Pct(20.0)))
                 .anchor(Anchor::CENTER);
+        let credits_button =
+            UiSprite::load_multi(&ctx, "credits_button", UiVec::new(Px(0), Pct(30.0)))
+                .anchor(Anchor::CENTER);
+        let back_button = UiSprite::load_multi(&ctx, "back_button", UiVec::new(Px(0), Px(-8)))
+            .anchor(Anchor::BOTTOM_CENTER);
 
-        let mut credits = UiSprite::load_single(&ctx, "credits.png", UiVec::new(Px(0), Pct(20.0)))
+        let mut credits = UiSprite::load_single(&ctx, "credits.png", UiVec::new(Px(0), Px(35)))
             .anchor(Anchor::CENTER);
         credits.width = Ratio(0.5).into();
-        let controls = UiSprite::load_single(&ctx, "controls.png", UiVec::new(Px(2), Px(-2)))
-            .anchor(Anchor::BOTTOM_LEFT);
+        let controls = UiSprite::load_single(&ctx, "controls.png", UiVec::new(Px(8), Px(35)))
+            .anchor(Anchor::CENTER);
+        let controls_label =
+            UiSprite::load_multi(&ctx, "controls_label", UiVec::new(Px(0), Px(75)))
+                .anchor(Anchor::CENTER);
 
         let mut join_waiting =
             UiSprite::load_single(&ctx, "join_wait.png", UiVec::new(Px(0), Pct(20.0)))
@@ -128,6 +149,8 @@ impl SharedAssets {
             skybox: Skybox::load(&ctx, "skybox"),
 
             game_logo,
+            logo_player,
+
             banana_icon,
             shell_background,
             red_shell_icon,
@@ -137,8 +160,12 @@ impl SharedAssets {
 
             start_button,
             credits_button,
+            settings_button,
+            back_button,
+
             credits,
             controls,
+            controls_label,
 
             item_frame,
 
@@ -161,6 +188,29 @@ impl SharedAssets {
         self.cursor.render(ctx);
     }
 
+    pub fn render_logo(&mut self, ctx: &RenderContext) -> bool {
+        let UiDim::Percent(player_x) = self.logo_player.pos.x else {
+            unreachable!();
+        };
+        let UiDim::Percent(logo_x) = self.game_logo.pos.x else {
+            unreachable!();
+        };
+
+        self.logo_player.pos.x = UiDim::Percent(player_x + ctx.dt * 50.0);
+        if logo_x < 0.0 {
+            self.game_logo.pos.x = UiDim::Percent(logo_x + ctx.dt * 50.0);
+        }
+        self.game_logo.pos.y = UiDim::Percent(-25.0 + (ctx.time() * 0.002).sin() as f32 * 2.0);
+
+        // let diff = logo_x.abs();
+        // self.game_logo.rot = diff * 0.75;
+
+        self.logo_player.render(ctx);
+        self.game_logo.render(ctx);
+
+        logo_x >= 0.0
+    }
+
     pub fn render_menu(&mut self, ctx: &RenderContext) {
         self.start_button.sheet.get_mut().active_sprite =
             if self.start_button.hovered(ctx.viewport, ctx.mouse_pos) {
@@ -177,6 +227,30 @@ impl SharedAssets {
                 0
             };
         self.credits_button.render(ctx);
+
+        self.settings_button.sheet.get_mut().active_sprite =
+            if self.settings_button.hovered(ctx.viewport, ctx.mouse_pos) {
+                1
+            } else {
+                0
+            };
+        self.settings_button.render(ctx);
+    }
+
+    pub fn render_back(&mut self, ctx: &RenderContext) {
+        self.back_button.sheet.get_mut().active_sprite =
+            if self.back_button.hovered(ctx.viewport, ctx.mouse_pos) {
+                1
+            } else {
+                0
+            };
+        self.back_button.render(ctx);
+    }
+
+    pub fn render_controls(&mut self, ctx: &RenderContext, swap: bool) {
+        self.controls_label.sheet.get_mut().active_sprite = if swap { 1 } else { 0 };
+        self.controls_label.render(ctx);
+        self.controls.render(ctx);
     }
 
     pub fn render_countdown(&mut self, ctx: &RenderContext, countdown: u32) {

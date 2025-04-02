@@ -23,7 +23,7 @@ use assets::SharedAssets;
 enum State {
     MainMenu {
         click: bool,
-        show_credits: bool,
+        state: MainMenuState,
     },
     WaitingToJoin,
     Loading {
@@ -37,6 +37,13 @@ enum State {
         map: Rc<Map>,
         race_state: RaceState,
     },
+}
+
+#[derive(Debug)]
+enum MainMenuState {
+    Main,
+    Credits,
+    Settings,
 }
 
 #[derive(Debug)]
@@ -99,6 +106,8 @@ pub struct Game {
     cache: AssetCache,
     shared_assets: SharedAssets,
     state: State,
+
+    swap_controls: bool,
 }
 
 impl Game {
@@ -155,11 +164,13 @@ impl Game {
 
             state: State::MainMenu {
                 click: false,
-                show_credits: false,
+                state: MainMenuState::Main,
             },
 
             cache,
             shared_assets,
+
+            swap_controls: false,
         }
     }
 
@@ -199,7 +210,7 @@ impl Game {
                 race_state: RaceState::Running { .. },
                 ..
             } => {
-                scene.player.key_down(&key);
+                scene.player.key_down(&key, self.swap_controls);
             }
             _ => {}
         }
@@ -212,7 +223,7 @@ impl Game {
                 race_state: RaceState::Running { .. },
                 ..
             } => {
-                scene.player.key_up(&key);
+                scene.player.key_up(&key, self.swap_controls);
             }
             _ => {}
         }
@@ -520,26 +531,59 @@ impl Game {
                 // let cam = Camera::new(60.0, self.viewport);
                 // self.state = State::Running { cam, objects, map };
             }
-            State::MainMenu {
-                click,
-                show_credits,
-            } => {
+            State::MainMenu { click, state } => {
                 if *click {
                     *click = false;
 
-                    if self
-                        .shared_assets
-                        .credits_button
-                        .hovered(self.viewport, self.mouse_pos)
-                        || *show_credits
-                    {
-                        *show_credits = !*show_credits;
-                    } else if self
-                        .shared_assets
-                        .start_button
-                        .hovered(self.viewport, self.mouse_pos)
-                    {
-                        self.connect();
+                    match state {
+                        MainMenuState::Main => {
+                            if self
+                                .shared_assets
+                                .credits_button
+                                .hovered(self.viewport, self.mouse_pos)
+                            {
+                                *state = MainMenuState::Credits;
+                            } else if self
+                                .shared_assets
+                                .start_button
+                                .hovered(self.viewport, self.mouse_pos)
+                            {
+                                self.connect();
+                            } else if self
+                                .shared_assets
+                                .settings_button
+                                .hovered(self.viewport, self.mouse_pos)
+                            {
+                                *state = MainMenuState::Settings;
+                            }
+                        }
+                        MainMenuState::Settings => {
+                            if self
+                                .shared_assets
+                                .controls
+                                .hovered(self.viewport, self.mouse_pos)
+                            {
+                                self.swap_controls = !self.swap_controls;
+                            }
+
+                            if self
+                                .shared_assets
+                                .back_button
+                                .hovered(self.viewport, self.mouse_pos)
+                            {
+                                *state = MainMenuState::Main;
+                            }
+                        }
+
+                        MainMenuState::Credits => {
+                            if self
+                                .shared_assets
+                                .back_button
+                                .hovered(self.viewport, self.mouse_pos)
+                            {
+                                *state = MainMenuState::Main;
+                            }
+                        }
                     }
                 }
             }
@@ -637,33 +681,40 @@ impl Game {
             State::WaitingToJoin => {
                 unsafe { self.gl.disable(glow::DEPTH_TEST) };
 
-                self.shared_assets.game_logo.render(&ctx);
+                self.shared_assets.render_logo(&ctx);
                 self.shared_assets.join_waiting.render(&ctx);
             }
 
             State::WaitingToStart { .. } => {
                 unsafe { self.gl.disable(glow::DEPTH_TEST) };
 
-                self.shared_assets.game_logo.render(&ctx);
+                self.shared_assets.render_logo(&ctx);
                 self.shared_assets.load_waiting.render(&ctx);
             }
             State::Loading { .. } => {
                 unsafe { self.gl.disable(glow::DEPTH_TEST) };
 
-                self.shared_assets.game_logo.render(&ctx);
+                self.shared_assets.render_logo(&ctx);
                 self.shared_assets.download_waiting.render(&ctx);
             }
 
-            State::MainMenu { show_credits, .. } => {
+            State::MainMenu { state, .. } => {
                 unsafe { self.gl.disable(glow::DEPTH_TEST) };
 
-                self.shared_assets.game_logo.render(&ctx);
+                let logo_done = self.shared_assets.render_logo(&ctx);
 
-                if *show_credits {
-                    self.shared_assets.credits.render(&ctx);
-                } else {
-                    self.shared_assets.render_menu(&ctx);
-                    self.shared_assets.controls.render(&ctx);
+                if logo_done {
+                    match state {
+                        MainMenuState::Main => self.shared_assets.render_menu(&ctx),
+                        MainMenuState::Settings => {
+                            self.shared_assets.render_controls(&ctx, self.swap_controls);
+                            self.shared_assets.render_back(&ctx);
+                        }
+                        MainMenuState::Credits => {
+                            self.shared_assets.credits.render(&ctx);
+                            self.shared_assets.render_back(&ctx);
+                        }
+                    }
                 }
             }
         }
